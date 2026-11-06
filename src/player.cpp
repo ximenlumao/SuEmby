@@ -27,8 +27,6 @@ void Player::play(const QString &url) {
     m_paused = false;
     m_position = 0;
     m_duration = 0;
-    m_playing = false;
-    m_paused = false;
     emit changed();
 }
 
@@ -38,6 +36,8 @@ void Player::stop() {
     mpv_command_async(m, 0, args);
     m_position = 0;
     m_duration = 0;
+    m_playing = false;
+    m_paused = false;
     emit changed();
 }
 
@@ -64,7 +64,11 @@ void Player::volume(double value) {
 
 void Player::poll() {
     if (!m) return;
-    mpv_get_property(m, "time-pos", MPV_FORMAT_DOUBLE, &m_position);
-    mpv_get_property(m, "duration", MPV_FORMAT_DOUBLE, &m_duration);
+    double position = 0;
+    double duration = 0;
+    if (mpv_get_property(m, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0)
+        m_position = position;
+    if (mpv_get_property(m, "duration", MPV_FORMAT_DOUBLE, &duration) >= 0)
+        m_duration = duration;
     emit changed();
 }
