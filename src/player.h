@@ -8,11 +8,15 @@ class Player : public QObject {
     Q_OBJECT
     Q_PROPERTY(double position READ position NOTIFY changed)
     Q_PROPERTY(double duration READ duration NOTIFY changed)
+    Q_PROPERTY(bool playing READ playing NOTIFY changed)
+    Q_PROPERTY(bool paused READ paused NOTIFY changed)
 public:
     explicit Player(QObject *p = nullptr);
     ~Player();
     double position() const { return m_position; }
     double duration() const { return m_duration; }
+    bool playing() const { return m_playing; }
+    bool paused() const { return m_paused; }
     mpv_handle *handle() const { return m; }
     Q_INVOKABLE void play(const QString &url);
     Q_INVOKABLE void pause();
@@ -27,4 +31,5 @@ private:
     mpv_handle *m = nullptr;
     QTimer *timer = nullptr;
     double m_position = 0, m_duration = 0;
+    bool m_playing = false, m_paused = false;
 };
