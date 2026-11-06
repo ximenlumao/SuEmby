@@ -41,6 +41,13 @@ jobs:
           Get-ChildItem mpv-sdk,mpv-runtime -Recurse -Filter *.dll | Copy-Item -Destination dist/ -Force
           windeployqt --compiler-runtime --qmldir qml dist/SuEmby.exe
           if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
+      - name: Bundle Vulkan loader
+        shell: pwsh
+        run: |
+          choco install vulkan-sdk --yes --no-progress
+          $loader = Get-ChildItem 'C:\VulkanSDK' -Recurse -Filter vulkan-1.dll | Select-Object -First 1
+          if (-not $loader) { throw 'Vulkan loader was not installed' }
+          Copy-Item $loader.FullName dist/
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
       - name: Diagnose bundled DLL dependencies
