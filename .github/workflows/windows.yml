@@ -13,22 +13,24 @@ jobs:
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
-      - name: Download MPV x64 SDK
+      - name: Download MPV x64 SDK and runtime
         shell: pwsh
         run: |
           $release = Invoke-RestMethod https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest
-          $asset = $release.assets | Where-Object { $_.name -match '^mpv-dev-x86_64-[0-9].*\.7z$' } | Select-Object -First 1
-          if (-not $asset) { throw 'Could not find the x64 MPV development archive' }
-          Invoke-WebRequest $asset.browser_download_url -OutFile mpv-sdk.7z
+          $dev = $release.assets | Where-Object { $_.name -match '^mpv-dev-x86_64-[0-9].*\.7z$' } | Select-Object -First 1
+          $runtimeArchive = $release.assets | Where-Object { $_.name -match '^mpv-x86_64-[0-9].*\.7z$' } | Select-Object -First 1
+          if (-not $dev -or -not $runtimeArchive) { throw 'MPV x64 SDK/runtime archive not found' }
+          Invoke-WebRequest $dev.browser_download_url -OutFile mpv-sdk.7z
+          Invoke-WebRequest $runtimeArchive.browser_download_url -OutFile mpv-runtime.7z
           7z x mpv-sdk.7z -ompv-sdk | Out-Null
+          7z x mpv-runtime.7z -ompv-runtime | Out-Null
           $header = Get-ChildItem mpv-sdk -Recurse -Filter client.h | Where-Object { $_.FullName -match 'mpv[\\/]client\.h$' } | Select-Object -First 1
           $library = Get-ChildItem mpv-sdk -Recurse -Include mpv.lib,libmpv.dll.a | Select-Object -First 1
           $runtime = Get-ChildItem mpv-sdk -Recurse -Include mpv-2.dll,libmpv-2.dll | Select-Object -First 1
-          if (-not $header -or -not $library -or -not $runtime) { throw 'MPV SDK is missing a header, import library, or runtime DLL' }
+          if (-not $header -or -not $library -or -not $runtime) { throw 'MPV SDK missing header, import library, or runtime DLL' }
           "MPV_INCLUDE_DIR=$($header.Directory.Parent.FullName)" >> $env:GITHUB_ENV
           "MPV_LIBRARY=$($library.FullName)" >> $env:GITHUB_ENV
           "MPV_RUNTIME=$($runtime.FullName)" >> $env:GITHUB_ENV
-          $runtimeAsset = $release.assets | Where-Object { $_.name -match '^mpv-x86_64-[0-9].*\.7z
       - name: Configure, build, and bundle runtime
         shell: pwsh
         run: |
@@ -49,76 +51,22 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Installer returned $($install.ExitCode)" }
           $exe = Join-Path $env:ProgramFiles 'SuEmby/SuEmby.exe'
           if (-not (Test-Path $exe)) { throw "Installed executable missing: $exe" }
-          $shortcutCandidates = @(
-            (Join-Path $env:USERPROFILE 'Desktop/SuEmby.lnk'),
-            (Join-Path $env:PUBLIC 'Desktop/SuEmby.lnk')
-          )
-          $shortcut = $shortcutCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $shortcut) { throw "Desktop shortcut missing in user or public desktop" }
+          $candidates = @((Join-Path $env:USERPROFILE 'Desktop/SuEmby.lnk'),(Join-Path $env:PUBLIC 'Desktop/SuEmby.lnk'))
+          $shortcut = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $shortcut) { throw 'Desktop shortcut missing' }
           $shell = New-Object -ComObject WScript.Shell
           $link = $shell.CreateShortcut($shortcut)
-          if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath($exe)) { throw "Desktop shortcut target is wrong: $($link.TargetPath)" }
+          if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath($exe)) { throw "Wrong shortcut target: $($link.TargetPath)" }
           $outLog = Join-Path $env:TEMP 'suemby-stdout.log'
           $errLog = Join-Path $env:TEMP 'suemby-stderr.log'
           $p = Start-Process -FilePath $link.TargetPath -WorkingDirectory (Split-Path $exe) -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
           Start-Sleep -Seconds 8
           $p.Refresh()
-          if ($p.HasExited) { throw "Shortcut target exited with code $($p.ExitCode). stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
-          $p.Refresh()
-          if ($p.MainWindowHandle -eq 0) { throw "App process is alive but no main window was created. stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
+          if ($p.HasExited) { throw "Shortcut target exited code $($p.ExitCode). stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
+          if ($p.MainWindowHandle -eq 0) { throw "No main window. stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
           $title = (Get-Process -Id $p.Id).MainWindowTitle
           if ($title -notmatch 'SuEmby') { throw "Unexpected window title: $title" }
-          $diagnostics = (Get-Content $errLog -Raw -ErrorAction SilentlyContinue)
-          if ($diagnostics -match 'QQmlApplicationEngine failed|Cannot assign|TypeError|module .* is not installed') { throw "QML startup diagnostics: $diagnostics" }
-          Stop-Process -Id $p.Id -Force
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SuEmby-Setup
-          path: Output/SuEmby-Setup.exe
- } | Select-Object -First 1
-          if (-not $runtimeAsset) { throw 'Could not find the full MPV x64 runtime archive' }
-          Invoke-WebRequest $runtimeAsset.browser_download_url -OutFile mpv-runtime.7z
-          7z x mpv-runtime.7z -ompv-runtime | Out-Null
-      - name: Configure, build, and bundle runtime
-        shell: pwsh
-        run: |
-          cmake -S . -B build -A x64 -DMPV_INCLUDE_DIR="$env:MPV_INCLUDE_DIR" -DMPV_LIBRARY="$env:MPV_LIBRARY"
-          cmake --build build --config Release
-          cmake --install build --config Release --prefix dist
-          Copy-Item $env:MPV_RUNTIME dist/
-          Get-ChildItem mpv-sdk -Recurse -Filter *.dll | Copy-Item -Destination dist/ -Force
-          windeployqt --qmldir qml dist/SuEmby.exe
-          if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
-      - run: choco install innosetup --yes --no-progress
-      - run: iscc installer/suemby.iss
-      - name: Install and verify desktop launch
-        shell: pwsh
-        run: |
-          $setup = (Resolve-Path Output/SuEmby-Setup.exe).Path
-          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Installer returned $($install.ExitCode)" }
-          $exe = Join-Path $env:ProgramFiles 'SuEmby/SuEmby.exe'
-          if (-not (Test-Path $exe)) { throw "Installed executable missing: $exe" }
-          $shortcutCandidates = @(
-            (Join-Path $env:USERPROFILE 'Desktop/SuEmby.lnk'),
-            (Join-Path $env:PUBLIC 'Desktop/SuEmby.lnk')
-          )
-          $shortcut = $shortcutCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $shortcut) { throw "Desktop shortcut missing in user or public desktop" }
-          $shell = New-Object -ComObject WScript.Shell
-          $link = $shell.CreateShortcut($shortcut)
-          if ([IO.Path]::GetFullPath($link.TargetPath) -ne [IO.Path]::GetFullPath($exe)) { throw "Desktop shortcut target is wrong: $($link.TargetPath)" }
-          $outLog = Join-Path $env:TEMP 'suemby-stdout.log'
-          $errLog = Join-Path $env:TEMP 'suemby-stderr.log'
-          $p = Start-Process -FilePath $link.TargetPath -WorkingDirectory (Split-Path $exe) -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
-          Start-Sleep -Seconds 8
-          $p.Refresh()
-          if ($p.HasExited) { throw "Shortcut target exited with code $($p.ExitCode). stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
-          $p.Refresh()
-          if ($p.MainWindowHandle -eq 0) { throw "App process is alive but no main window was created. stderr: $(Get-Content $errLog -Raw -ErrorAction SilentlyContinue)" }
-          $title = (Get-Process -Id $p.Id).MainWindowTitle
-          if ($title -notmatch 'SuEmby') { throw "Unexpected window title: $title" }
-          $diagnostics = (Get-Content $errLog -Raw -ErrorAction SilentlyContinue)
+          $diagnostics = Get-Content $errLog -Raw -ErrorAction SilentlyContinue
           if ($diagnostics -match 'QQmlApplicationEngine failed|Cannot assign|TypeError|module .* is not installed') { throw "QML startup diagnostics: $diagnostics" }
           Stop-Process -Id $p.Id -Force
       - uses: actions/upload-artifact@v4
