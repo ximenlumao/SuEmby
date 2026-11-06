@@ -38,7 +38,14 @@ jobs:
           Get-ChildItem mpv-sdk -Recurse -Filter *.dll | Copy-Item -Destination dist/ -Force
           windeployqt --qmldir qml dist/SuEmby.exe
           if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
-          if (-not (Test-Path (Join-Path dist (Split-Path $env:MPV_RUNTIME -Leaf)))) { throw 'MPV runtime DLL missing from bundle' }
+      - name: Smoke test application startup
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path dist/SuEmby.exe) -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) { throw "SuEmby exited during startup with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
       - uses: actions/upload-artifact@v4
