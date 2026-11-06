@@ -99,6 +99,7 @@ void EmbyClient::get(QString path, QVariantMap params, std::function<void(QJsonO
         p->deleteLater();
         if (error != QNetworkReply::NoError) {
             m_error = errorText;
+            if (m_loading) { m_loading = false; emit loadingChanged(); }
             emit errorChanged();
         } else {
             cb(QJsonDocument::fromJson(b).object());
@@ -157,8 +158,12 @@ void EmbyClient::loadItems(QVariantMap params) {
     params.insert("ImageTypeLimit", "1");
     params.insert("Limit", "48");
     const int generation = ++m_itemsGeneration;
+    m_loading = true;
+    emit loadingChanged();
     get("/emby/Users/" + m_uid + "/Items", params, [this, generation](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
+        m_loading = false;
+        emit loadingChanged();
         m_items.clear();
         for (const auto &v : o.value("Items").toArray()) {
             const auto x = v.toObject();
