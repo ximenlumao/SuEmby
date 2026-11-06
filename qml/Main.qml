@@ -26,6 +26,33 @@ ApplicationWindow {
     property color ink: isLight ? "#18202d" : "#f5f6f8"
     property color muted: isLight ? "#697386" : "#9ca3b2"
 
+    component TactileButton: Button {
+        id: control
+        property bool accent: false
+        implicitHeight: 40
+        scale: down ? 0.96 : (hovered ? 1.025 : 1.0)
+        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+        background: Rectangle {
+            radius: 11
+            color: control.accent ? (control.down ? "#3567c2" : (control.hovered ? "#5b91f3" : "#4b82e8"))
+                                  : (control.down ? "#343d4c" : (control.hovered ? "#2a3240" : "#202632"))
+            border.width: control.hovered ? 1 : 0
+            border.color: control.accent ? "#9bbcff" : "#4a566a"
+            Behavior on color { ColorAnimation { duration: 100 } }
+        }
+        contentItem: Text {
+            text: control.text
+            color: "#f3f6fb"
+            font.pixelSize: 12
+            font.weight: control.accent ? Font.DemiBold : Font.Medium
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            leftPadding: 12
+            rightPadding: 12
+        }
+    }
+
     function loadSection(label) {
         sectionTitle.text = label
         searchBox.text = ""
@@ -53,7 +80,6 @@ ApplicationWindow {
         if (!item || !item.id || playPending) return
         if (item.type === "Series") {
             openDetails(item)
-            showFeedback("这是剧集合集，请在详情中选择分集播放。")
             return
         }
         currentTitle = item.name
@@ -400,7 +426,6 @@ ApplicationWindow {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.openDetails(modelData)
-                                        onDoubleClicked: root.playItem(modelData)
                                     }
                                     MouseArea {
                                         anchors.centerIn: parent
@@ -549,15 +574,16 @@ ApplicationWindow {
                             }
                         }
                         Item { Layout.fillWidth: true }
-                        Button {
+                        TactileButton {
                             visible: root.selectedItem && root.selectedItem.type === "Series"
                             text: "选择分集"
                             onClicked: root.showEpisodes(root.selectedItem)
                         }
-                        Button { text: "关闭"; onClicked: detailsDialog.close() }
-                        Button {
+                        TactileButton { text: "关闭"; onClicked: detailsDialog.close() }
+                        TactileButton {
                             visible: !root.selectedItem || root.selectedItem.type !== "Series"
-                            text: root.playPending ? "连接中…" : "▶  播放"
+                            accent: true
+                            text: root.playPending ? "正在连接…" : "▶  播放"
                             enabled: !root.playPending
                             onClicked: { root.playItem(root.selectedItem); if (root.selectedItem && root.selectedItem.type !== "Series") detailsDialog.close() }
                             background: Rectangle { radius: 9; color: "#4b86f7" }
@@ -638,8 +664,6 @@ ApplicationWindow {
                         to: Math.max(1, mpv.duration)
                         value: seekSlider.pressed ? seekSlider.previewValue : mpv.position
                         property real previewValue: mpv.position
-                        onPressedChanged: if (pressed) previewValue = value
-                        onMoved: previewValue = value
                         onPressedChanged: {
                             if (pressed) previewValue = value
                             else {
@@ -647,6 +671,7 @@ ApplicationWindow {
                                 emby.reportPlaybackProgress(previewValue, mpv.duration, "TimeUpdate")
                             }
                         }
+                        onMoved: previewValue = value
                         background: Rectangle {
                             x: seekSlider.leftPadding
                             y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2
