@@ -1,6 +1,7 @@
 #pragma once
 #include <QQuickFramebufferObject>
 #include <QPointer>
+#include <QTimer>
 #include "player.h"
 
 class MpvVideoRenderer;
@@ -22,5 +23,5 @@ signals:
 private:
     QPointer<Player> m_player;
     bool m_active = false;
-    class QTimer *m_frameTimer = nullptr;
+    QTimer *m_frameTimer = nullptr;
 };
