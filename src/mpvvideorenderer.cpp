@@ -3,6 +3,8 @@
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFramebufferObjectFormat>
 #include <QOpenGLFunctions>
+#include <QQuickOpenGLUtils>
+#include <QByteArray>
 #include <mpv/render.h>
 #include <mpv/render_gl.h>
 
@@ -64,6 +66,7 @@ public:
         };
         mpv_render_context_render(m_renderContext, params);
         context->functions()->glFlush();
+        QQuickOpenGLUtils::resetOpenGLState();
     }
 
 private:
