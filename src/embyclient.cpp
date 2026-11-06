@@ -153,7 +153,8 @@ void EmbyClient::requestHomeSections() {
         else if (type == "mixed" || type.isEmpty()) includeTypes = "Movie,Series,MusicVideo,Video";
         else continue;
         sections << QVariantMap{{"id", library.value("id")}, {"name", library.value("name")},
-                                {"type", type}, {"items", QVariantList{}}, {"loading", true}};
+                                {"type", type}, {"includeTypes", includeTypes},
+                                {"items", QVariantList{}}, {"loading", true}};
     }
     m_homeSections = sections;
     emit homeSectionsChanged();
@@ -161,7 +162,7 @@ void EmbyClient::requestHomeSections() {
     for (int index = 0; index < sections.size(); ++index) {
         const QVariantMap section = sections.at(index).toMap();
         QVariantMap params{{"ParentId", section.value("id")}, {"Recursive", "true"},
-                           {"Filters", "IsNotFolder"}, {"IncludeItemTypes", includeTypes},
+                           {"Filters", "IsNotFolder"}, {"IncludeItemTypes", section.value("includeTypes")},
                            {"SortBy", "DateCreated"}, {"SortOrder", "Descending"},
                            {"StartIndex", 0}, {"Limit", 12},
                            {"Fields", "Overview,UserData,Genres,DateCreated"},
