@@ -37,6 +37,9 @@ Player::~Player() {
 
 void Player::play(const QString &url) {
     if (!m) return;
+    m_rotation = 0;
+    int64_t rotation = 0;
+    mpv_set_property(m, "video-rotate", MPV_FORMAT_INT64, &rotation);
     const QByteArray encoded = url.toUtf8();
     const char *args[] = {"loadfile", encoded.constData(), nullptr};
     m_error.clear();
@@ -94,8 +97,8 @@ void Player::seek(double seconds) {
 void Player::setVolume(double value) {
     if (!m) return;
     const double bounded = qBound(0.0, value, 100.0);
-    const int status = mpv_set_property(m, "volume", MPV_FORMAT_DOUBLE,
-                                        const_cast<double *>(&bounded));
+    double actual = bounded;
+    const int status = mpv_set_property(m, "volume", MPV_FORMAT_DOUBLE, &actual);
     if (status < 0) {
         m_error = QString::fromUtf8(mpv_error_string(status));
     } else {
