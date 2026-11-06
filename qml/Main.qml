@@ -629,12 +629,14 @@ ApplicationWindow {
         modal: true
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: Overlay.overlay
-        width: Math.min(root.width - 48, 1120)
+        property bool playerFullscreen: false
+        width: playerFullscreen ? root.width : Math.min(root.width - 48, 1120)
         onClosed: {
+            playerFullscreen = false
             emby.stopPlayback(mpv.position, mpv.duration)
             mpv.stop()
         }
-        height: Math.min(root.height - 48, 700)
+        height: playerFullscreen ? root.height : Math.min(root.height - 48, 700)
         padding: 0
         background: Rectangle { radius: 16; color: "#08090c"; border.color: "#323743"; clip: true }
         contentItem: Item {
@@ -649,6 +651,11 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Text { text: root.currentTitle; color: "#f5f6f8"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
+                        TactileButton {
+                            text: playerDialog.playerFullscreen ? "⛶" : "⛶"
+                            Layout.preferredWidth: 42
+                            onClicked: playerDialog.playerFullscreen = !playerDialog.playerFullscreen
+                        }
                         TactileButton {
                             text: "×"
                             Layout.preferredWidth: 42
@@ -685,6 +692,19 @@ ApplicationWindow {
                             }
                         }
                     }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 158
+                        radius: 16
+                        color: "#11151d"
+                        border.color: "#242b38"
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            anchors.topMargin: 10
+                            anchors.bottomMargin: 10
+                            spacing: 5
                     Item {
                         id: seekBar
                         Layout.fillWidth: true
@@ -878,7 +898,10 @@ ApplicationWindow {
                             popup.background: Rectangle { radius: 10; color: "#171c25"; border.color: "#343c49" }
                         }
                         Item { Layout.fillWidth: true }
-                    }                }
+                    }
+                        }
+                    }
+                }
             }
         }
     }
