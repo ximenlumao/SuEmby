@@ -2,6 +2,7 @@
 #include <QTimer>
 #include <QVariantMap>
 #include <mpv/render.h>
+#include <mpv/error.h>
 
 namespace {
 const mpv_node *mapValue(const mpv_node_list *list, const char *key) {
@@ -38,11 +39,13 @@ void Player::play(const QString &url) {
     if (!m) return;
     const QByteArray encoded = url.toUtf8();
     const char *args[] = {"loadfile", encoded.constData(), nullptr};
-    mpv_command_async(m, 0, args);
-    m_playing = true;
+    m_error.clear();
+    const int status = mpv_command_async(m, 0, args);
+    m_playing = status >= 0;
     m_paused = false;
     m_position = 0;
     m_duration = 0;
+    if (status < 0) m_error = QString::fromUtf8(mpv_error_string(status));
     emit changed();
 }
 
@@ -54,6 +57,7 @@ void Player::stop() {
     m_duration = 0;
     m_playing = false;
     m_paused = false;
+    m_error.clear();
     emit changed();
 }
 
@@ -92,6 +96,21 @@ void Player::volume(double value) {
 
 void Player::poll() {
     if (!m) return;
+    while (true) {
+        const mpv_event *event = mpv_wait_event(m, 0);
+        if (!event || event->event_id == MPV_EVENT_NONE) break;
+        if (event->event_id == MPV_EVENT_END_FILE && event->data) {
+            const auto *end = static_cast<const mpv_event_end_file *>(event->data);
+            if (end->reason == MPV_END_FILE_REASON_ERROR) {
+                m_error = QString::fromUtf8(mpv_error_string(end->error));
+                m_playing = false;
+                m_paused = false;
+            } else if (end->reason == MPV_END_FILE_REASON_EOF) {
+                m_playing = false;
+                m_paused = false;
+            }
+        }
+    }
     double position = 0;
     double duration = 0;
     if (mpv_get_property(m, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0)
