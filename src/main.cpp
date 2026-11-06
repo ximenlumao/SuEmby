@@ -3,11 +3,17 @@
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
+#include <windows.h>
 #include "mpvvideorenderer.h"
 #include "embyclient.h"
 #include "player.h"
 
+namespace {
+HANDLE suEmbyRunningMutex = nullptr;
+}
+
 int main(int argc, char **argv) {
+    suEmbyRunningMutex = CreateMutexW(nullptr, FALSE, L"Local\\SuEmby.Running");
     QGuiApplication app(argc, argv);
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
     QCoreApplication::setOrganizationName("SuEmby");
