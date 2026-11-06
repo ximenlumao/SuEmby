@@ -143,7 +143,7 @@ void EmbyClient::load(QString type) {
 }
 
 void EmbyClient::loadLibrary(QString id, QString collectionType) {
-    QVariantMap params{{"ParentId", id}, {"Recursive", "true"}};
+    QVariantMap params{{"ParentId", id}, {"Recursive", "true"}, {"Filters", "IsNotFolder"}};
     if (collectionType == "movies")
         params.insert("IncludeItemTypes", "Movie");
     else if (collectionType == "tvshows")
@@ -159,7 +159,7 @@ void EmbyClient::loadSpecial(QString mode) {
     if (mode == "resume") {
         loadItems({{"__Endpoint", "Resume"}, {"Recursive", "true"},
                    {"SortBy", "DatePlayed"}, {"Filters", "IsResumable"},
-                   {"IncludeItemTypes", "Movie,Series"}});
+                   {"IncludeItemTypes", "Movie,Episode"}});
     } else if (mode == "favorites") {
         loadItems({{"Recursive", "true"}, {"SortBy", "DateCreated"},
                    {"Filters", "IsFavorite"}, {"IncludeItemTypes", "Movie,Series"}});
@@ -193,7 +193,8 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
     emit loadingChanged();
     const QString path = "/emby/Users/" + m_uid + "/Items" +
                          (endpoint == "Resume" ? "/Resume" : "");
-    get(path, params, [this, generation, startIndex, append](QJsonObject o) {
+    const bool allowEpisodes = endpoint == "Resume";
+    get(path, params, [this, generation, startIndex, append, allowEpisodes](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
         m_loading = false;
         emit loadingChanged();
@@ -203,7 +204,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
         for (const auto &v : o.value("Items").toArray()) {
             const auto x = v.toObject();
             const QString mediaType = x.value("Type").toString();
-            if (mediaType == "Episode" || mediaType == "Season") continue;
+            if (mediaType == "Season" || (mediaType == "Episode" && !allowEpisodes)) continue;
             const QString id = x.value("Id").toString();
             const auto tags = x.value("ImageTags").toObject();
             const auto backdrops = x.value("BackdropImageTags").toArray();
