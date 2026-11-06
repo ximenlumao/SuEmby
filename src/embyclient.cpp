@@ -148,9 +148,15 @@ void EmbyClient::loadLibrary(QString id, QString collectionType) {
         params.insert("IncludeItemTypes", "Movie");
     else if (collectionType == "tvshows")
         params.insert("IncludeItemTypes", "Series");
-    else if (collectionType != "mixed")
-        params.insert("IncludeItemTypes", "Movie,Series");
-    else
+    else if (collectionType == "musicvideos")
+        params.insert("IncludeItemTypes", "MusicVideo");
+    else if (collectionType == "homevideos")
+        params.insert("IncludeItemTypes", "Video");
+    else if (collectionType == "photos")
+        params.insert("IncludeItemTypes", "Photo");
+    else if (collectionType == "books")
+        params.insert("IncludeItemTypes", "Book");
+    else if (collectionType == "mixed")
         params.insert("ExcludeItemTypes", "Episode,Season");
     loadItems(params);
 }
