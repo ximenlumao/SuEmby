@@ -1,6 +1,8 @@
 #include "player.h"
 #include <QTimer>
 #include <QVariantMap>
+#include <QSettings>
+#include <QStringList>
 #include <mpv/render.h>
 
 namespace {
@@ -22,8 +24,13 @@ Player::Player(QObject *parent) : QObject(parent) {
     if (!m) return;
     mpv_set_option_string(m, "vo", "libmpv");
     mpv_set_option_string(m, "gpu-api", "opengl");
-    mpv_set_option_string(m, "hwdec", "auto-copy");
-    mpv_set_option_string(m, "video-rotate", "0");
+    QSettings settings;
+    m_decoderMode = settings.value("player/hwdec", "auto-copy").toString();
+    const QStringList decoderModes{"auto-copy", "d3d11va-copy", "nvdec-copy", "no"};
+    if (!decoderModes.contains(m_decoderMode)) m_decoderMode = "auto-copy";
+    const QByteArray decoder = m_decoderMode.toUtf8();
+    mpv_set_option_string(m, "hwdec", decoder.constData());
+    mpv_set_option_string(m, "vf", "sub");
     mpv_set_option_string(m, "keep-open", "no");
     mpv_initialize(m);
     timer = new QTimer(this);
@@ -37,9 +44,6 @@ Player::~Player() {
 
 void Player::play(const QString &url) {
     if (!m) return;
-    m_rotation = 0;
-    int64_t rotation = 0;
-    mpv_set_property(m, "video-rotate", MPV_FORMAT_INT64, &rotation);
     const QByteArray encoded = url.toUtf8();
     const char *args[] = {"loadfile", encoded.constData(), nullptr};
     m_error.clear();
@@ -108,13 +112,19 @@ void Player::setVolume(double value) {
     emit changed();
 }
 
-void Player::rotateVideo() {
-    if (!m) return;
-    m_rotation = (m_rotation + 90) % 360;
-    int64_t degrees = m_rotation;
-    const int status = mpv_set_property(m, "video-rotate", MPV_FORMAT_INT64, &degrees);
-    if (status < 0) m_error = QString::fromUtf8(mpv_error_string(status));
-    else m_error.clear();
+void Player::setDecoderMode(const QString &mode) {
+    const QStringList decoderModes{"auto-copy", "d3d11va-copy", "nvdec-copy", "no"};
+    if (!decoderModes.contains(mode) || mode == m_decoderMode) return;
+    m_decoderMode = mode;
+    QSettings settings;
+    settings.setValue("player/hwdec", m_decoderMode);
+    settings.sync();
+    if (m) {
+        const QByteArray decoder = m_decoderMode.toUtf8();
+        const int status = mpv_set_property_string(m, "hwdec", decoder.constData());
+        if (status < 0) m_error = QString::fromUtf8(mpv_error_string(status));
+        else m_error.clear();
+    }
     emit changed();
 }
 
