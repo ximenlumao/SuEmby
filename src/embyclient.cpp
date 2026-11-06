@@ -220,7 +220,8 @@ void EmbyClient::load(QString type) {
 }
 
 void EmbyClient::loadLibrary(QString id, QString collectionType) {
-    QVariantMap params{{"ParentId", id}, {"Recursive", "true"}, {"Filters", "IsNotFolder"}};
+    QVariantMap params{{"ParentId", id}, {"Recursive", "true"}, {"Filters", "IsNotFolder"},
+                       {"__LibraryType", collectionType}};
     if (collectionType == "movies")
         params.insert("IncludeItemTypes", "Movie");
     else if (collectionType == "tvshows")
@@ -287,6 +288,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
     }
     const QString endpoint = params.take("__Endpoint").toString();
     const QString seriesId = params.take("__SeriesId").toString();
+    const QString libraryType = params.take("__LibraryType").toString();
     const int startIndex = append ? m_nextStart : 0;
     params.insert("StartIndex", startIndex);
     params.insert("SortBy", params.value("SortBy", "DateCreated"));
@@ -303,7 +305,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
     if (endpoint == "SeriesEpisodes")
         path = "/emby/Shows/" + seriesId + "/Episodes";
     const bool allowEpisodes = endpoint == "Resume" || endpoint == "SeriesEpisodes";
-    get(path, params, [this, generation, startIndex, append, allowEpisodes](QJsonObject o) {
+    get(path, params, [this, generation, startIndex, append, allowEpisodes, libraryType](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
         m_loading = false;
         emit loadingChanged();
@@ -314,6 +316,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
             const auto x = v.toObject();
             const QString mediaType = x.value("Type").toString();
             if (mediaType == "Season" || (mediaType == "Episode" && !allowEpisodes)) continue;
+            if (libraryType == "tvshows" && mediaType != "Series") continue;
             m_items << mapItem(x);
         }
         m_nextStart = startIndex + o.value("Items").toArray().size();
