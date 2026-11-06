@@ -32,10 +32,10 @@ ApplicationWindow {
             emby.loadLibrary(lib.id)
         }
     }
-    function loadLibrary(id, label) {
+    function loadLibrary(id, label, collectionType) {
         sectionTitle.text = label
         searchBox.text = ""
-        emby.loadLibrary(id)
+        emby.loadLibrary(id, collectionType)
     }
     function playItem(item) {
         if (!item || !item.id) return
@@ -154,7 +154,7 @@ ApplicationWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.loadLibrary(modelData.id, modelData.name)
+                            onClicked: root.loadLibrary(modelData.id, modelData.name, modelData.type)
                         }
                     }
                 }
@@ -540,7 +540,7 @@ ApplicationWindow {
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
                         Button {
                             text: "×"
-                            onClicked: { mpv.stop(); playerDialog.close() }
+                            onClicked: playerDialog.close()
                             background: Rectangle { radius: 8; color: "#252a33" }
                             contentItem: Text { text: parent.text; color: "#e5e8ed"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
@@ -609,7 +609,7 @@ ApplicationWindow {
         target: emby
         function onLoggedIn() {
             loginDialog.close()
-            if (emby.libraries.length) root.loadLibrary(emby.libraries[0].id, emby.libraries[0].name)
+            if (emby.libraries.length) root.loadLibrary(emby.libraries[0].id, emby.libraries[0].name, emby.libraries[0].type)
             else emby.load("Movie")
         }
         function onPlayUrl(url) { playerDialog.open(); mpv.play(url) }
