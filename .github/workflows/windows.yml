@@ -44,9 +44,10 @@ jobs:
       - name: Bundle Vulkan loader
         shell: pwsh
         run: |
-          choco install vulkan-sdk --yes --no-progress
-          $loader = Get-ChildItem 'C:\VulkanSDK' -Recurse -Filter vulkan-1.dll | Select-Object -First 1
-          if (-not $loader) { throw 'Vulkan loader was not installed' }
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-runtime-components.zip -OutFile vulkan-runtime.zip
+          Expand-Archive vulkan-runtime.zip -DestinationPath vulkan-runtime
+          $loader = Get-ChildItem vulkan-runtime -Recurse -Filter vulkan-1.dll | Select-Object -First 1
+          if (-not $loader) { throw 'Official Vulkan runtime archive did not contain vulkan-1.dll' }
           Copy-Item $loader.FullName dist/
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
