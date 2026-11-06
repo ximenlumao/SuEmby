@@ -29,7 +29,7 @@ public:
     Q_INVOKABLE void login(QString, QString, QString);
     Q_INVOKABLE void refreshLibraries();
     Q_INVOKABLE void load(QString type = "Movie");
-    Q_INVOKABLE void loadLibrary(QString id);
+    Q_INVOKABLE void loadLibrary(QString id, QString collectionType = QString());
     Q_INVOKABLE void search(QString);
     Q_INVOKABLE void play(QString);
 signals:
