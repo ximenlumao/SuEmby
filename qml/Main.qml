@@ -15,6 +15,12 @@ ApplicationWindow {
     property color primaryText: "#f5f6f8"
     property color secondaryText: "#9ca3b2"
     property var selectedItem: null
+    property var decoderOptions: [
+        { label: "自动兼容（推荐）", value: "auto-copy" },
+        { label: "Direct3D 11 硬件解码", value: "d3d11va-copy" },
+        { label: "NVIDIA NVDEC", value: "nvdec-copy" },
+        { label: "软件解码", value: "no" }
+    ]
     property string currentTitle: "正在播放"
     property bool playPending: false
     property string feedbackText: ""
@@ -90,6 +96,17 @@ ApplicationWindow {
     function openDetails(item) {
         selectedItem = item
         detailsDialog.open()
+    }
+    function setPlayerFullscreen(enabled) {
+        playerDialog.playerFullscreen = enabled
+        playerDialog.controlsVisible = true
+        if (enabled) {
+            root.showFullScreen()
+            fullscreenControlsTimer.restart()
+        } else {
+            fullscreenControlsTimer.stop()
+            root.showNormal()
+        }
     }
     function timeText(value) {
         var s = Math.max(0, Math.floor(value || 0))
@@ -221,6 +238,12 @@ ApplicationWindow {
                         text: emby.userId.length ? "Emby 已连接" : "尚未连接服务器"
                         color: root.muted; font.pixelSize: 11; elide: Text.ElideRight
                     }
+                }
+                Item { height: 10 }
+                TactileButton {
+                    Layout.fillWidth: true
+                    text: "⚙  播放设置"
+                    onClicked: settingsDialog.open()
                 }
                 Item { height: 10 }
                 RowLayout {
@@ -734,36 +757,94 @@ ApplicationWindow {
         }
 
     Dialog {
+        id: settingsDialog
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: 500
+        padding: 24
+        background: Rectangle { radius: 18; color: root.panel; border.color: root.isLight ? "#e0e5ed" : "#2d3340" }
+        contentItem: ColumnLayout {
+            spacing: 14
+            Text { text: "播放设置"; color: root.ink; font.pixelSize: 22; font.bold: true }
+            Text { text: "为不同片源选择合适的解码方式。切换后从下一次播放生效。"; color: root.muted; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { text: "视频解码器"; color: root.ink; font.pixelSize: 12; font.bold: true }
+            ComboBox {
+                id: decoderSelector
+                Layout.fillWidth: true
+                model: root.decoderOptions
+                textRole: "label"
+                currentIndex: {
+                    for (var i = 0; i < root.decoderOptions.length; ++i)
+                        if (root.decoderOptions[i].value === mpv.decoderMode) return i
+                    return 0
+                }
+                onActivated: mpv.setDecoderMode(root.decoderOptions[index].value)
+                contentItem: Text {
+                    leftPadding: 12; rightPadding: 30
+                    text: decoderSelector.displayText
+                    color: root.ink; font.pixelSize: 12
+                    verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                }
+                background: Rectangle { radius: 10; color: root.subtlePanel; border.color: decoderSelector.hovered ? "#718bb8" : "#343c49" }
+                delegate: ItemDelegate {
+                    width: decoderSelector.width
+                    text: modelData.label
+                    contentItem: Text { text: parent.text; color: root.ink; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 10 }
+                    background: Rectangle { color: parent.highlighted ? "#34445f" : root.panel; radius: 6 }
+                }
+                popup.background: Rectangle { radius: 10; color: root.panel; border.color: root.isLight ? "#e0e5ed" : "#343c49" }
+            }
+            Text { Layout.fillWidth: true; text: "自动兼容优先使用可用的硬件解码；若片源黑屏或报错，可尝试 Direct3D 11、NVIDIA NVDEC，或软件解码。硬件选项是否可用取决于显卡驱动和片源编码。"; color: root.muted; font.pixelSize: 11; wrapMode: Text.WordWrap }
+            Item { height: 2 }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                TactileButton { text: "关闭"; onClicked: settingsDialog.close() }
+            }
+        }
+    }
+
+    Dialog {
         id: playerDialog
+        Timer {
+            id: fullscreenControlsTimer
+            interval: 2600
+            onTriggered: playerDialog.controlsVisible = false
+        }
         modal: true
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: Overlay.overlay
         property bool playerFullscreen: false
+        property bool controlsVisible: true
         width: playerFullscreen ? root.width : Math.min(root.width - 48, 1120)
         onClosed: {
+            if (playerFullscreen) root.showNormal()
             playerFullscreen = false
+            controlsVisible = true
+            fullscreenControlsTimer.stop()
             emby.stopPlayback(mpv.position, mpv.duration)
             mpv.stop()
         }
         height: playerFullscreen ? root.height : Math.min(root.height - 48, 700)
         padding: 0
-        background: Rectangle { radius: 16; color: "#08090c"; border.color: "#323743"; clip: true }
+        background: Rectangle { radius: playerFullscreen ? 0 : 16; color: "#08090c"; border.color: playerFullscreen ? "transparent" : "#323743"; clip: true }
         contentItem: Item {
             Rectangle {
                 anchors.fill: parent
                 color: "#08090c"
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 22
-                    spacing: 12
+                    anchors.margins: playerDialog.playerFullscreen ? 0 : 22
+                    spacing: playerDialog.playerFullscreen ? 0 : 12
                     RowLayout {
+                        visible: !playerDialog.playerFullscreen || playerDialog.controlsVisible
                         Layout.fillWidth: true
                         Text { text: root.currentTitle; color: "#f5f6f8"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
                         TactileButton {
                             text: playerDialog.playerFullscreen ? "还原" : "⛶"
                             Layout.preferredWidth: 42
-                            onClicked: playerDialog.playerFullscreen = !playerDialog.playerFullscreen
+                            onClicked: root.setPlayerFullscreen(!playerDialog.playerFullscreen)
                         }
                         TactileButton {
                             text: "×"
@@ -784,6 +865,17 @@ ApplicationWindow {
                             player: mpv
                             active: playerDialog.visible
                         }
+                        MouseArea {
+                            anchors.fill: parent
+                            z: 5
+                            visible: playerDialog.playerFullscreen
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                            onPositionChanged: {
+                                playerDialog.controlsVisible = true
+                                fullscreenControlsTimer.restart()
+                            }
+                        }
                         Column {
                             anchors.centerIn: parent
                             spacing: 10
@@ -802,6 +894,7 @@ ApplicationWindow {
                         }
                     }
                     Rectangle {
+                        visible: !playerDialog.playerFullscreen || playerDialog.controlsVisible
                         Layout.fillWidth: true
                         Layout.preferredHeight: 158
                         radius: 16
@@ -933,10 +1026,6 @@ ApplicationWindow {
                                 border.color: "#829fe0"
                             }
                         }
-                        TactileButton {
-                            text: "旋转 90°"
-                            onClicked: mpv.rotateVideo()
-                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -1044,6 +1133,12 @@ ApplicationWindow {
         interval: 3600
         onTriggered: feedbackToast.close()
     }
+    Shortcut {
+        sequence: "Escape"
+        enabled: playerDialog.visible && playerDialog.playerFullscreen
+        onActivated: root.setPlayerFullscreen(false)
+    }
+
     Player { id: mpv }
     Timer {
         interval: 10000
