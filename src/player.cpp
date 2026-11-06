@@ -4,8 +4,8 @@
 Player::Player(QObject *parent) : QObject(parent) {
     m = mpv_create();
     if (!m) return;
-    mpv_set_option_string(m, "vo", "gpu-next");
-    mpv_set_option_string(m, "gpu-api", "d3d11");
+    mpv_set_option_string(m, "vo", "libmpv");
+    mpv_set_option_string(m, "gpu-api", "opengl");
     mpv_set_option_string(m, "hwdec", "auto-safe");
     mpv_set_option_string(m, "keep-open", "no");
     mpv_initialize(m);
@@ -23,6 +23,13 @@ void Player::play(const QString &url) {
     const QByteArray encoded = url.toUtf8();
     const char *args[] = {"loadfile", encoded.constData(), nullptr};
     mpv_command_async(m, 0, args);
+    m_playing = true;
+    m_paused = false;
+    m_position = 0;
+    m_duration = 0;
+    m_playing = false;
+    m_paused = false;
+    emit changed();
 }
 
 void Player::stop() {
@@ -40,6 +47,8 @@ void Player::pause() {
     if (mpv_get_property(m, "pause", MPV_FORMAT_FLAG, &paused) >= 0) {
         paused = !paused;
         mpv_set_property(m, "pause", MPV_FORMAT_FLAG, &paused);
+        m_paused = paused != 0;
+        emit changed();
     }
 }
 
