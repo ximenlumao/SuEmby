@@ -933,7 +933,6 @@ ApplicationWindow {
                                 border.color: "#829fe0"
                             }
                         }
-                    }
                         TactileButton {
                             text: "旋转 90°"
                             onClicked: mpv.rotateVideo()
