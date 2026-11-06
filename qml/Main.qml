@@ -16,6 +16,9 @@ ApplicationWindow {
     property color secondaryText: "#9ca3b2"
     property var selectedItem: null
     property string currentTitle: "正在播放"
+    property bool playPending: false
+    property string feedbackText: ""
+    property string lastMpvError: ""
     property bool isLight: false
     property color canvas: isLight ? "#f3f5f8" : "#0b0d12"
     property color panel: isLight ? "#ffffff" : "#141720"
@@ -26,15 +29,20 @@ ApplicationWindow {
     function loadSection(label) {
         sectionTitle.text = label
         searchBox.text = ""
-        if (label === "首页" && emby.libraries.length) {
-            const lib = emby.libraries[0]
-            sectionTitle.text = lib.name
-            emby.loadLibrary(lib.id, lib.type)
-        } else if (label === "继续观看") {
-            emby.loadSpecial("resume")
-        } else if (label === "收藏") {
-            emby.loadSpecial("favorites")
-        }
+        if (label === "首页") emby.loadHome()
+        else if (label === "继续观看") emby.loadSpecial("resume")
+        else if (label === "收藏") emby.loadSpecial("favorites")
+    }
+    function showFeedback(message) {
+        feedbackText = message
+        feedbackToast.open()
+        feedbackTimer.restart()
+    }
+    function showEpisodes(item) {
+        if (!item) return
+        sectionTitle.text = item.name + " · 分集"
+        detailsDialog.close()
+        emby.loadSeriesEpisodes(item.id)
     }
     function loadLibrary(id, label, collectionType) {
         sectionTitle.text = label
@@ -42,8 +50,15 @@ ApplicationWindow {
         emby.loadLibrary(id, collectionType)
     }
     function playItem(item) {
-        if (!item || !item.id) return
+        if (!item || !item.id || playPending) return
+        if (item.type === "Series") {
+            openDetails(item)
+            showFeedback("这是剧集合集，请在详情中选择分集播放。")
+            return
+        }
         currentTitle = item.name
+        playPending = true
+        showFeedback("正在连接 Emby 并准备播放…")
         emby.play(item.id)
     }
     function openDetails(item) {
@@ -246,7 +261,7 @@ ApplicationWindow {
                     }
                     Button {
                         text: "⟳"
-                        onClicked: emby.load("Movie")
+                        onClicked: root.loadSection(sectionTitle.text === "首页" ? "首页" : sectionTitle.text)
                         background: Rectangle { radius: 11; color: root.panel }
                         contentItem: Text { text: parent.text; color: root.muted; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     }
@@ -375,7 +390,9 @@ ApplicationWindow {
                                         width: 44; height: 44; radius: 22
                                         color: "#e9ffffff"
                                         opacity: posterHover.containsMouse ? 1 : 0
-                                        Text { anchors.centerIn: parent; text: "▶"; color: "#172033"; font.pixelSize: 16 }
+                                        scale: posterHover.containsMouse ? 1 : 0.92
+                                        Behavior on scale { NumberAnimation { duration: 120 } }
+                                        Text { anchors.centerIn: parent; text: modelData.type === "Series" ? "⋯" : "▶"; color: "#172033"; font.pixelSize: 16 }
                                     }
                                     MouseArea {
                                         id: posterHover
@@ -384,6 +401,22 @@ ApplicationWindow {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.openDetails(modelData)
                                         onDoubleClicked: root.playItem(modelData)
+                                    }
+                                    MouseArea {
+                                        anchors.centerIn: parent
+                                        width: 54; height: 54
+                                        visible: posterHover.containsMouse
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.playItem(modelData)
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: width / 2
+                                            color: parent.pressed ? "#9bbcff" : (parent.containsMouse ? "#ffffff" : "#e9ffffff")
+                                            border.color: "#c4d7ff"
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Text { anchors.centerIn: parent; text: modelData.type === "Series" ? "⋯" : "▶"; color: "#172033"; font.pixelSize: 16 }
+                                        }
                                     }
                                     Rectangle {
                                         anchors.left: parent.left; anchors.top: parent.top
@@ -516,10 +549,17 @@ ApplicationWindow {
                             }
                         }
                         Item { Layout.fillWidth: true }
+                        Button {
+                            visible: root.selectedItem && root.selectedItem.type === "Series"
+                            text: "选择分集"
+                            onClicked: root.showEpisodes(root.selectedItem)
+                        }
                         Button { text: "关闭"; onClicked: detailsDialog.close() }
                         Button {
-                            text: "▶  播放"
-                            onClicked: { root.playItem(root.selectedItem); detailsDialog.close() }
+                            visible: !root.selectedItem || root.selectedItem.type !== "Series"
+                            text: root.playPending ? "连接中…" : "▶  播放"
+                            enabled: !root.playPending
+                            onClicked: { root.playItem(root.selectedItem); if (root.selectedItem && root.selectedItem.type !== "Series") detailsDialog.close() }
                             background: Rectangle { radius: 9; color: "#4b86f7" }
                             contentItem: Text { text: parent.text; color: "white"; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; leftPadding: 13; rightPadding: 13 }
                         }
@@ -580,7 +620,15 @@ ApplicationWindow {
                             visible: !mpv.playing
                             Text { anchors.horizontalCenter: parent.horizontalCenter; text: "▶"; color: "#93b8ff"; font.pixelSize: 34 }
                             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.currentTitle; color: "#dce1eb"; font.pixelSize: 16; font.bold: true }
-                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "正在连接视频流…"; color: "#777f8d"; font.pixelSize: 11 }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: mpv.error.length ? "播放失败：" + mpv.error : (mpv.playing ? "正在打开视频流…" : "正在连接视频流…")
+                                color: mpv.error.length ? "#ff8790" : "#a3adbd"
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                width: Math.min(520, root.width - 100)
+                                horizontalAlignment: Text.AlignHCenter
+                            }
                         }
                     }
                     Slider {
@@ -590,10 +638,14 @@ ApplicationWindow {
                         to: Math.max(1, mpv.duration)
                         value: seekSlider.pressed ? seekSlider.previewValue : mpv.position
                         property real previewValue: mpv.position
+                        onPressedChanged: if (pressed) previewValue = value
                         onMoved: previewValue = value
-                        onPressedChanged: if (!pressed) {
-                            mpv.seek(value)
-                            emby.reportPlaybackProgress(value, mpv.duration, "TimeUpdate")
+                        onPressedChanged: {
+                            if (pressed) previewValue = value
+                            else {
+                                mpv.seek(previewValue)
+                                emby.reportPlaybackProgress(previewValue, mpv.duration, "TimeUpdate")
+                            }
                         }
                         background: Rectangle {
                             x: seekSlider.leftPadding
@@ -684,9 +736,18 @@ ApplicationWindow {
         target: emby
         function onLoggedIn() {
             loginDialog.close()
-            if (emby.libraries.length) root.loadLibrary(emby.libraries[0].id, emby.libraries[0].name, emby.libraries[0].type)
-            else emby.load("Movie")
+            root.loadSection("首页")
         }
-        function onPlayUrl(url) { playerDialog.open(); mpv.play(url) }
+        function onErrorChanged() {
+            if (root.playPending && emby.error.length) {
+                root.playPending = false
+                root.showFeedback("播放失败：" + emby.error)
+            }
+        }
+        function onPlayUrl(url) {
+            root.playPending = false
+            playerDialog.open()
+            mpv.play(url)
+        }
     }
 }
