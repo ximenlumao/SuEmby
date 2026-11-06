@@ -148,13 +148,42 @@ void EmbyClient::loadLibrary(QString id, QString collectionType) {
         params.insert("IncludeItemTypes", "Movie");
     else if (collectionType == "tvshows")
         params.insert("IncludeItemTypes", "Series");
-    else
+    else if (collectionType != "mixed")
         params.insert("IncludeItemTypes", "Movie,Series");
+    else
+        params.insert("ExcludeItemTypes", "Episode,Season");
     loadItems(params);
 }
 
-void EmbyClient::loadItems(QVariantMap params) {
-    params.insert("SortBy", "DateCreated");
+void EmbyClient::loadSpecial(QString mode) {
+    if (mode == "resume") {
+        loadItems({{"__Endpoint", "Resume"}, {"Recursive", "true"},
+                   {"SortBy", "DatePlayed"}, {"Filters", "IsResumable"},
+                   {"IncludeItemTypes", "Movie,Series"}});
+    } else if (mode == "favorites") {
+        loadItems({{"Recursive", "true"}, {"SortBy", "DateCreated"},
+                   {"Filters", "IsFavorite"}, {"IncludeItemTypes", "Movie,Series"}});
+    }
+}
+
+void EmbyClient::loadMore() {
+    if (m_loading || !hasMore()) return;
+    loadItems(m_currentQuery, true);
+}
+
+void EmbyClient::loadItems(QVariantMap params, bool append) {
+    if (append) {
+        params = m_currentQuery;
+    } else {
+        m_currentQuery = params;
+        m_nextStart = 0;
+        m_total = 0;
+        emit hasMoreChanged();
+    }
+    const QString endpoint = params.take("__Endpoint").toString();
+    const int startIndex = append ? m_nextStart : 0;
+    params.insert("StartIndex", startIndex);
+    params.insert("SortBy", params.value("SortBy", "DateCreated"));
     params.insert("SortOrder", "Descending");
     params.insert("Fields", "Overview,UserData,Genres");
     params.insert("ImageTypeLimit", "1");
@@ -162,11 +191,15 @@ void EmbyClient::loadItems(QVariantMap params) {
     const int generation = ++m_itemsGeneration;
     m_loading = true;
     emit loadingChanged();
-    get("/emby/Users/" + m_uid + "/Items", params, [this, generation](QJsonObject o) {
+    const QString path = "/emby/Users/" + m_uid + "/Items" +
+                         (endpoint == "Resume" ? "/Resume" : "");
+    get(path, params, [this, generation, startIndex, append](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
         m_loading = false;
         emit loadingChanged();
-        m_items.clear();
+        if (!append) m_items.clear();
+        m_total = o.value("TotalRecordCount").toInt();
+        m_nextStart = startIndex;
         for (const auto &v : o.value("Items").toArray()) {
             const auto x = v.toObject();
             const QString mediaType = x.value("Type").toString();
@@ -175,9 +208,8 @@ void EmbyClient::loadItems(QVariantMap params) {
             const auto tags = x.value("ImageTags").toObject();
             const auto backdrops = x.value("BackdropImageTags").toArray();
             const QString token = "?X-Emby-Token=" + QString::fromLatin1(QUrl::toPercentEncoding(m_token));
-            QVariantMap item{
-                {"id", id},
-                {"name", x.value("Name").toString()},
+            m_items << QVariantMap{
+                {"id", id}, {"name", x.value("Name").toString()}, {"type", mediaType},
                 {"overview", x.value("Overview").toString()},
                 {"year", x.value("ProductionYear").toInt()},
                 {"rating", x.value("CommunityRating").toDouble()},
@@ -189,14 +221,16 @@ void EmbyClient::loadItems(QVariantMap params) {
                 {"genres", x.value("Genres").toArray().toVariantList()},
                 {"hasPoster", tags.contains("Primary")}
             };
-            m_items << item;
         }
+        m_nextStart = startIndex + o.value("Items").toArray().size();
         emit itemsChanged();
+        emit hasMoreChanged();
     });
 }
 
 void EmbyClient::search(QString s) {
-    loadItems({{"SearchTerm", s}, {"Recursive", "true"}, {"IncludeItemTypes", "Movie,Series"}});
+    loadItems({{"SearchTerm", s}, {"Recursive", "true"},
+               {"IncludeItemTypes", "Movie,Series"}});
 }
 
 void EmbyClient::play(QString id) {
