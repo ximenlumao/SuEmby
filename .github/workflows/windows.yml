@@ -9,26 +9,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
-      - uses: actions/checkout@v4
-        with:
-          repository: microsoft/vcpkg
-          path: vcpkg
-      - name: Bootstrap vcpkg and install manifest
-        shell: pwsh
-        run: |
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          .\vcpkg\vcpkg.exe install --triplet x64-windows
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
+      - name: Download MPV x64 SDK
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest
+          $asset = $release.assets | Where-Object { $_.name -match '^mpv-dev-x86_64-[0-9].*\.7z$' } | Select-Object -First 1
+          if (-not $asset) { throw 'Could not find the x64 MPV development archive' }
+          Invoke-WebRequest $asset.browser_download_url -OutFile mpv-sdk.7z
+          7z x mpv-sdk.7z -ompv-sdk | Out-Null
+          $header = Get-ChildItem mpv-sdk -Recurse -Filter client.h | Where-Object { $_.FullName -match 'mpv[\\/]client\.h$' } | Select-Object -First 1
+          $library = Get-ChildItem mpv-sdk -Recurse -Include mpv.lib,libmpv.dll.a | Select-Object -First 1
+          $runtime = Get-ChildItem mpv-sdk -Recurse -Include mpv-2.dll,libmpv-2.dll | Select-Object -First 1
+          if (-not $header -or -not $library -or -not $runtime) { throw 'MPV SDK is missing a header, import library, or runtime DLL' }
+          "MPV_INCLUDE_DIR=$($header.Directory.Parent.FullName)" >> $env:GITHUB_ENV
+          "MPV_LIBRARY=$($library.FullName)" >> $env:GITHUB_ENV
+          "MPV_RUNTIME=$($runtime.FullName)" >> $env:GITHUB_ENV
       - name: Configure and build
         shell: pwsh
         run: |
-          cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake -S . -B build -A x64 -DMPV_INCLUDE_DIR="$env:MPV_INCLUDE_DIR" -DMPV_LIBRARY="$env:MPV_LIBRARY"
           cmake --build build --config Release
           cmake --install build --config Release --prefix dist
-          Copy-Item vcpkg/installed/x64-windows/bin/*.dll dist/
+          Copy-Item $env:MPV_RUNTIME dist/
           windeployqt --qmldir qml dist/SuEmby.exe
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
