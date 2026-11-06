@@ -42,7 +42,7 @@ public:
                 mpv_render_context_free(m_renderContext);
                 m_renderContext = nullptr;
             }
-            mpv_opengl_init_params glInit{getMpvGlProc, nullptr, 0};
+            mpv_opengl_init_params glInit{getMpvGlProc, nullptr};
             mpv_render_param initParams[] = {
                 {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
                 {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &glInit},
