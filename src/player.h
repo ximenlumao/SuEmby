@@ -15,6 +15,7 @@ public:
     double duration() const { return m_duration; }
     Q_INVOKABLE void play(const QString &url);
     Q_INVOKABLE void pause();
+    Q_INVOKABLE void stop();
     Q_INVOKABLE void seek(double seconds);
     Q_INVOKABLE void volume(double value);
 signals:
