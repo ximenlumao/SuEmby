@@ -153,7 +153,7 @@ void EmbyClient::requestHomeSections() {
         else if (type == "mixed" || type.isEmpty()) includeTypes = "Movie,Series,MusicVideo,Video";
         else continue;
         sections << QVariantMap{{"id", library.value("id")}, {"name", library.value("name")},
-                                {"type", type}, {"items", QVariantList{}}, {"loading", true}}};
+                                {"type", type}, {"items", QVariantList{}}, {"loading", true}};
     }
     m_homeSections = sections;
     emit homeSectionsChanged();
