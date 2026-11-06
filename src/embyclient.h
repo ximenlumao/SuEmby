@@ -38,7 +38,7 @@ public:
     Q_INVOKABLE void loadSpecial(QString mode);
     Q_INVOKABLE void loadMore();
     Q_INVOKABLE void setFavorite(QString id, bool favorite);
-    Q_INVOKABLE void reportPlaybackProgress(double position, double duration, QString eventName = "TimeUpdate");
+    Q_INVOKABLE void reportPlaybackProgress(double position, double duration, QString eventName = "TimeUpdate", bool isPaused = false);
     Q_INVOKABLE void stopPlayback(double position, double duration);
     Q_INVOKABLE void play(QString);
 signals:
