@@ -124,8 +124,10 @@ void EmbyClient::refreshLibraries() {
             }
         }
         emit librariesChanged();
-        if (!m_libraries.isEmpty())
-            loadLibrary(m_libraries.first().toMap().value("id").toString());
+        if (!m_libraries.isEmpty()) {
+            const auto first = m_libraries.first().toMap();
+            loadLibrary(first.value("id").toString(), first.value("type").toString());
+        }
     });
 }
 
@@ -137,20 +139,31 @@ void EmbyClient::load(QString type) {
     loadLibrary(type);
 }
 
-void EmbyClient::loadLibrary(QString id) {
-    loadItems({{"ParentId", id}, {"Recursive", "true"}});
+void EmbyClient::loadLibrary(QString id, QString collectionType) {
+    QVariantMap params{{"ParentId", id}, {"Recursive", "true"}};
+    if (collectionType == "movies")
+        params.insert("IncludeItemTypes", "Movie");
+    else if (collectionType == "tvshows")
+        params.insert("IncludeItemTypes", "Series");
+    else
+        params.insert("IncludeItemTypes", "Movie,Series");
+    loadItems(params);
 }
 
 void EmbyClient::loadItems(QVariantMap params) {
     params.insert("SortBy", "DateCreated");
     params.insert("SortOrder", "Descending");
-    params.insert("Fields", "Overview,People,UserData,Genres,MediaSources");
+    params.insert("Fields", "Overview,UserData,Genres");
     params.insert("ImageTypeLimit", "1");
-    params.insert("Limit", "100");
-    get("/emby/Users/" + m_uid + "/Items", params, [this](QJsonObject o) {
+    params.insert("Limit", "48");
+    const int generation = ++m_itemsGeneration;
+    get("/emby/Users/" + m_uid + "/Items", params, [this, generation](QJsonObject o) {
+        if (generation != m_itemsGeneration) return;
         m_items.clear();
         for (const auto &v : o.value("Items").toArray()) {
             const auto x = v.toObject();
+            const QString mediaType = x.value("Type").toString();
+            if (mediaType == "Episode" || mediaType == "Season") continue;
             const QString id = x.value("Id").toString();
             const auto tags = x.value("ImageTags").toObject();
             const auto backdrops = x.value("BackdropImageTags").toArray();
@@ -176,7 +189,7 @@ void EmbyClient::loadItems(QVariantMap params) {
 }
 
 void EmbyClient::search(QString s) {
-    loadItems({{"SearchTerm", s}, {"Recursive", "true"}});
+    loadItems({{"SearchTerm", s}, {"Recursive", "true"}, {"IncludeItemTypes", "Movie,Series"}});
 }
 
 void EmbyClient::play(QString id) {
