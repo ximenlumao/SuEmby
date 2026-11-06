@@ -324,7 +324,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Text { text: searchBox.text.length ? "搜索结果" : "最近添加"; color: root.ink; font.pixelSize: 17; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Text { text: emby.items.length ? emby.items.length + " 项" : ""; color: root.muted; font.pixelSize: 11 }
+                    Text { text: emby.loading ? "正在加载…" : (emby.items.length ? emby.items.length + " 项" : ""); color: root.muted; font.pixelSize: 11 }
                 }
 
                 Item {
