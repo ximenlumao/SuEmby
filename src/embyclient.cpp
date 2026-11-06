@@ -310,9 +310,25 @@ void EmbyClient::play(QString id) {
             emit errorChanged();
             return;
         }
-        const QString sourceId = sources.first().toObject().value("Id").toString();
-        emit playUrl(m_server + "/emby/Videos/" + id +
-                     "/stream?static=true&mediaSourceId=" + sourceId +
-                     "&X-Emby-Token=" + QString::fromLatin1(QUrl::toPercentEncoding(m_token)));
+        const auto source = sources.first().toObject();
+        m_playbackItemId = id;
+        m_mediaSourceId = source.value("Id").toString();
+        m_playSessionId = o.value("PlaySessionId").toString();
+        if (m_playSessionId.isEmpty())
+            m_playSessionId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const QJsonObject started{
+            {"QueueableMediaTypes", QJsonArray{"Video"}},
+            {"CanSeek", true}, {"ItemId", id}, {"MediaSourceId", m_mediaSourceId},
+            {"IsPaused", false}, {"IsMuted", false}, {"PositionTicks", 0},
+            {"VolumeLevel", 100}, {"PlayMethod", "DirectPlay"},
+            {"PlaySessionId", m_playSessionId}, {"PlaylistIndex", 0},
+            {"PlaylistLength", 1}, {"PlaybackRate", 1.0}
+        };
+        post("/emby/Sessions/Playing", started);
+        const QString url = m_server + "/emby/Videos/" + id +
+            "/stream?static=true&mediaSourceId=" + QString::fromLatin1(QUrl::toPercentEncoding(m_mediaSourceId)) +
+            "&PlaySessionId=" + QString::fromLatin1(QUrl::toPercentEncoding(m_playSessionId)) +
+            "&X-Emby-Token=" + QString::fromLatin1(QUrl::toPercentEncoding(m_token));
+        emit playUrl(url);
     });
 }
