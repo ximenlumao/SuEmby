@@ -84,8 +84,10 @@ void Player::pause() {
 }
 
 void Player::seek(double seconds) {
-    if (!m) return;
-    mpv_set_property(m, "time-pos", MPV_FORMAT_DOUBLE, &seconds);
+    if (!m || seconds < 0) return;
+    const QByteArray position = QByteArray::number(seconds, 'f', 3);
+    const char *args[] = {"seek", position.constData(), "absolute+exact", nullptr};
+    mpv_command_async(m, 0, args);
 }
 
 void Player::volume(double value) {
