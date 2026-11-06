@@ -15,5 +15,5 @@ qt_add_executable(SuEmby WIN32
 set_target_properties(SuEmby PROPERTIES AUTOMOC ON)
 qt_add_resources(SuEmby qml PREFIX "/" FILES qml/Main.qml)
 target_include_directories(SuEmby PRIVATE ${MPV_INCLUDE_DIR})
-target_link_libraries(SuEmby PRIVATE Qt6::Quick Qt6::Network ${MPV_LIBRARY})
+target_link_libraries(SuEmby PRIVATE Qt6::Quick Qt6::Network ${MPV_LIBRARY} Crypt32)
 install(TARGETS SuEmby RUNTIME DESTINATION .)
