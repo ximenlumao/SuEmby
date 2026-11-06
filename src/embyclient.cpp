@@ -127,11 +127,17 @@ void EmbyClient::refreshLibraries() {
             }
         }
         emit librariesChanged();
-        if (!m_libraries.isEmpty()) {
-            const auto first = m_libraries.first().toMap();
-            loadLibrary(first.value("id").toString(), first.value("type").toString());
-        }
     });
+}
+
+void EmbyClient::loadHome() {
+    loadItems({{"Recursive", "true"}, {"Filters", "IsNotFolder"},
+               {"IncludeItemTypes", "Movie,Series,MusicVideo,Video"}});
+}
+
+void EmbyClient::loadSeriesEpisodes(QString seriesId) {
+    loadItems({{"__Endpoint", "SeriesEpisodes"}, {"ParentId", seriesId},
+               {"Recursive", "true"}, {"IncludeItemTypes", "Episode"}});
 }
 
 void EmbyClient::load(QString type) {
@@ -199,7 +205,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
     emit loadingChanged();
     const QString path = "/emby/Users/" + m_uid + "/Items" +
                          (endpoint == "Resume" ? "/Resume" : "");
-    const bool allowEpisodes = endpoint == "Resume";
+    const bool allowEpisodes = endpoint == "Resume" || endpoint == "SeriesEpisodes";
     get(path, params, [this, generation, startIndex, append, allowEpisodes](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
         m_loading = false;
@@ -310,10 +316,12 @@ void EmbyClient::stopPlayback(double position, double duration) {
 }
 
 void EmbyClient::play(QString id) {
-    get("/emby/Items/" + id + "/PlaybackInfo", {}, [this, id](QJsonObject o) {
+    m_error.clear();
+    emit errorChanged();
+    get("/emby/Items/" + id + "/PlaybackInfo", {{"UserId", m_uid}}, [this, id](QJsonObject o) {
         const auto sources = o.value("MediaSources").toArray();
         if (sources.isEmpty()) {
-            m_error = "服务器没有返回可播放的视频源";
+            m_error = "Emby 没有返回可播放的视频源。请确认该影片有可播放文件，或尝试稍后重试。";
             emit errorChanged();
             return;
         }
