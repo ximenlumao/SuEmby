@@ -7,6 +7,7 @@
 #include <QByteArray>
 #include <windows.h>
 #include <dpapi.h>
+#include <QUuid>
 
 namespace {
 QString protectPassword(const QString &password) {
@@ -70,6 +71,7 @@ void EmbyClient::authenticate(QString server, QString username, QString password
         }
         m_token = token;
         m_uid = uid;
+        emit sessionChanged();
         QSettings settings;
         settings.setValue("account/server", m_server);
         settings.setValue("account/username", username);
