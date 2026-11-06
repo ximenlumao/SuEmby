@@ -26,9 +26,16 @@ ApplicationWindow {
     function loadSection(label) {
         sectionTitle.text = label
         searchBox.text = ""
-        if (label === "电影") emby.load("Movie")
-        else if (label === "电视剧" || label === "动漫") emby.load("Series")
-        else emby.load("Movie")
+        if (label === "首页" && emby.libraries.length) {
+            const lib = emby.libraries[0]
+            sectionTitle.text = lib.name
+            emby.loadLibrary(lib.id)
+        }
+    }
+    function loadLibrary(id, label) {
+        sectionTitle.text = label
+        searchBox.text = ""
+        emby.loadLibrary(id)
     }
     function playItem(item) {
         if (!item || !item.id) return
@@ -84,14 +91,7 @@ ApplicationWindow {
                 Text { text: "媒体"; color: root.muted; font.pixelSize: 11; font.bold: true; leftPadding: 12 }
                 Item { height: 10 }
                 Repeater {
-                    model: [
-                        {label:"首页", symbol:"⌂"},
-                        {label:"电影", symbol:"▣"},
-                        {label:"电视剧", symbol:"▤"},
-                        {label:"动漫", symbol:"✧"},
-                        {label:"继续观看", symbol:"▷"},
-                        {label:"收藏", symbol:"♡"}
-                    ]
+                    model: [{label:"首页", symbol:"⌂"}]
                     delegate: Rectangle {
                         Layout.fillWidth: true
                         height: 42
@@ -122,6 +122,39 @@ ApplicationWindow {
                                 if (modelData.label === "首页") root.loadSection("电影")
                                 else root.loadSection(modelData.label)
                             }
+                        }
+                    }
+                }
+                Repeater {
+                    model: emby.libraries
+                    delegate: Rectangle {
+                        Layout.fillWidth: true
+                        height: 42
+                        radius: 11
+                        color: sectionTitle.text === modelData.name ? (root.isLight ? "#e7efff" : "#202b40") : "transparent"
+                        Row {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            spacing: 12
+                            Text {
+                                width: 18; anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.type === "tvshows" ? "▤" : (modelData.type === "movies" ? "▣" : "◈")
+                                color: sectionTitle.text === modelData.name ? "#79aaff" : root.muted
+                                font.pixelSize: 17
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.name
+                                color: sectionTitle.text === modelData.name ? root.ink : root.muted
+                                font.pixelSize: 13
+                                elide: Text.ElideRight
+                                width: 145
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.loadLibrary(modelData.id, modelData.name)
                         }
                     }
                 }
@@ -396,9 +429,21 @@ ApplicationWindow {
             spacing: 13
             Text { text: "连接 Emby"; color: root.ink; font.pixelSize: 22; font.bold: true }
             Text { text: "输入服务器地址和账号信息"; color: root.muted; font.pixelSize: 12 }
-            TextField { id: serverField; Layout.fillWidth: true; placeholderText: "服务器地址，例如 http://192.168.1.10:8096" }
-            TextField { id: userField; Layout.fillWidth: true; placeholderText: "用户名" }
-            TextField { id: passwordField; Layout.fillWidth: true; placeholderText: "密码"; echoMode: TextInput.Password }
+            TextField {
+                id: serverField; Layout.fillWidth: true; placeholderText: "服务器地址，例如 http://192.168.1.10:8096"
+                color: root.ink; placeholderTextColor: root.muted; leftPadding: 14; rightPadding: 14; selectByMouse: true
+                background: Rectangle { radius: 10; color: root.subtlePanel; border.width: serverField.activeFocus ? 1 : 0; border.color: "#6e9eff" }
+            }
+            TextField {
+                id: userField; Layout.fillWidth: true; placeholderText: "用户名"
+                color: root.ink; placeholderTextColor: root.muted; leftPadding: 14; rightPadding: 14; selectByMouse: true
+                background: Rectangle { radius: 10; color: root.subtlePanel; border.width: userField.activeFocus ? 1 : 0; border.color: "#6e9eff" }
+            }
+            TextField {
+                id: passwordField; Layout.fillWidth: true; placeholderText: "密码"; echoMode: TextInput.Password
+                color: root.ink; placeholderTextColor: root.muted; leftPadding: 14; rightPadding: 14; selectByMouse: true
+                background: Rectangle { radius: 10; color: root.subtlePanel; border.width: passwordField.activeFocus ? 1 : 0; border.color: "#6e9eff" }
+            }
             Text { Layout.fillWidth: true; text: emby.error; color: "#ff777f"; wrapMode: Text.WordWrap; font.pixelSize: 11 }
             RowLayout {
                 Layout.fillWidth: true
@@ -406,7 +451,7 @@ ApplicationWindow {
                 Button { text: "取消"; onClicked: loginDialog.close() }
                 Button {
                     text: "连接"
-                    onClicked: { emby.login(serverField.text, userField.text, passwordField.text); loginDialog.close() }
+                    onClicked: emby.login(serverField.text, userField.text, passwordField.text)
                     background: Rectangle { radius: 9; color: "#4b86f7" }
                     contentItem: Text { text: parent.text; color: "white"; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; leftPadding: 14; rightPadding: 14 }
                 }
@@ -473,8 +518,11 @@ ApplicationWindow {
     Dialog {
         id: playerDialog
         modal: true
+        closePolicy: Popup.NoAutoClose
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 48, 1120)
+        onClosed: mpv.stop()
+        onRejected: { mpv.stop(); close() }
         height: Math.min(root.height - 48, 700)
         padding: 0
         background: Rectangle { radius: 16; color: "#08090c"; border.color: "#323743"; clip: true }
@@ -492,7 +540,7 @@ ApplicationWindow {
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
                         Button {
                             text: "×"
-                            onClicked: playerDialog.close()
+                            onClicked: { mpv.stop(); playerDialog.close() }
                             background: Rectangle { radius: 8; color: "#252a33" }
                             contentItem: Text { text: parent.text; color: "#e5e8ed"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
@@ -550,9 +598,20 @@ ApplicationWindow {
     }
 
     Player { id: mpv }
+    Component.onCompleted: {
+        serverField.text = emby.savedServer
+        userField.text = emby.savedUsername
+        passwordField.text = emby.savedPassword
+        if (emby.savedServer.length && emby.savedPassword.length) emby.restoreSession()
+        else loginDialog.open()
+    }
     Connections {
         target: emby
-        function onLoggedIn() { root.loadSection("电影") }
+        function onLoggedIn() {
+            loginDialog.close()
+            if (emby.libraries.length) root.loadLibrary(emby.libraries[0].id, emby.libraries[0].name)
+            else emby.load("Movie")
+        }
         function onPlayUrl(url) { playerDialog.open(); mpv.play(url) }
     }
 }
