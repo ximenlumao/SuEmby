@@ -622,7 +622,6 @@ ApplicationWindow {
                 }
             }
         }
-    }
 
     Dialog {
         id: playerDialog
@@ -652,7 +651,7 @@ ApplicationWindow {
                         Text { text: root.currentTitle; color: "#f5f6f8"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
                         TactileButton {
-                            text: playerDialog.playerFullscreen ? "⛶" : "⛶"
+                            text: playerDialog.playerFullscreen ? "还原" : "⛶"
                             Layout.preferredWidth: 42
                             onClicked: playerDialog.playerFullscreen = !playerDialog.playerFullscreen
                         }
