@@ -11,6 +11,7 @@ class Player : public QObject {
     Q_PROPERTY(double duration READ duration NOTIFY changed)
     Q_PROPERTY(bool playing READ playing NOTIFY changed)
     Q_PROPERTY(bool paused READ paused NOTIFY changed)
+    Q_PROPERTY(QString error READ error NOTIFY changed)
     Q_PROPERTY(QVariantList audioTracks READ audioTracks NOTIFY changed)
     Q_PROPERTY(QVariantList subtitleTracks READ subtitleTracks NOTIFY changed)
 public:
@@ -20,6 +21,7 @@ public:
     double duration() const { return m_duration; }
     bool playing() const { return m_playing; }
     bool paused() const { return m_paused; }
+    QString error() const { return m_error; }
     QVariantList audioTracks() const { return m_audioTracks; }
     QVariantList subtitleTracks() const { return m_subtitleTracks; }
     mpv_handle *handle() const { return m; }
@@ -39,5 +41,6 @@ private:
     QTimer *timer = nullptr;
     double m_position = 0, m_duration = 0;
     bool m_playing = false, m_paused = false;
+    QString m_error;
     QVariantList m_audioTracks, m_subtitleTracks;
 };
