@@ -22,7 +22,8 @@ Player::Player(QObject *parent) : QObject(parent) {
     if (!m) return;
     mpv_set_option_string(m, "vo", "libmpv");
     mpv_set_option_string(m, "gpu-api", "opengl");
-    mpv_set_option_string(m, "hwdec", "auto-safe");
+    mpv_set_option_string(m, "hwdec", "auto-copy");
+    mpv_set_option_string(m, "video-rotate", "0");
     mpv_set_option_string(m, "keep-open", "no");
     mpv_initialize(m);
     timer = new QTimer(this);
@@ -90,9 +91,28 @@ void Player::seek(double seconds) {
     mpv_command_async(m, 0, args);
 }
 
-void Player::volume(double value) {
+void Player::setVolume(double value) {
     if (!m) return;
-    mpv_set_property(m, "volume", MPV_FORMAT_DOUBLE, &value);
+    const double bounded = qBound(0.0, value, 100.0);
+    const int status = mpv_set_property(m, "volume", MPV_FORMAT_DOUBLE,
+                                        const_cast<double *>(&bounded));
+    if (status < 0) {
+        m_error = QString::fromUtf8(mpv_error_string(status));
+    } else {
+        m_volume = bounded;
+        m_error.clear();
+    }
+    emit changed();
+}
+
+void Player::rotateVideo() {
+    if (!m) return;
+    m_rotation = (m_rotation + 90) % 360;
+    int64_t degrees = m_rotation;
+    const int status = mpv_set_property(m, "video-rotate", MPV_FORMAT_INT64, &degrees);
+    if (status < 0) m_error = QString::fromUtf8(mpv_error_string(status));
+    else m_error.clear();
+    emit changed();
 }
 
 void Player::poll() {
@@ -114,10 +134,13 @@ void Player::poll() {
     }
     double position = 0;
     double duration = 0;
+    double volume = 100;
     if (mpv_get_property(m, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0)
         m_position = position;
     if (mpv_get_property(m, "duration", MPV_FORMAT_DOUBLE, &duration) >= 0)
         m_duration = duration;
+    if (mpv_get_property(m, "volume", MPV_FORMAT_DOUBLE, &volume) >= 0)
+        m_volume = qBound(0.0, volume, 100.0);
 
     mpv_node tracks{};
     if (mpv_get_property(m, "track-list", MPV_FORMAT_NODE, &tracks) >= 0 &&
