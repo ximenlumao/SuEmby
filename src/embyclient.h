@@ -42,6 +42,7 @@ private:
     QNetworkAccessManager net;
     QString m_server, m_token, m_uid, m_error;
     QVariantList m_items, m_libraries;
+    int m_itemsGeneration = 0;
     void get(QString, QVariantMap, std::function<void(QJsonObject)>);
     void authenticate(QString server, QString username, QString password);
     void loadItems(QVariantMap params);
