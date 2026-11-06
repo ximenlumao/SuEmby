@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 project(SuEmby LANGUAGES CXX)
+if(WIN32)
+  enable_language(RC)
+endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Network OpenGL)
@@ -14,6 +17,9 @@ qt_add_executable(SuEmby WIN32
   src/mpvvideorenderer.cpp
   src/mpvvideorenderer.h
 )
+if(WIN32)
+  target_sources(SuEmby PRIVATE resources.rc)
+endif()
 set_target_properties(SuEmby PROPERTIES AUTOMOC ON)
 qt_add_resources(SuEmby qml PREFIX "/" FILES qml/Main.qml)
 target_include_directories(SuEmby PRIVATE ${MPV_INCLUDE_DIR})
