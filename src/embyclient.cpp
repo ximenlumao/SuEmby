@@ -127,17 +127,82 @@ void EmbyClient::refreshLibraries() {
             }
         }
         emit librariesChanged();
+        if (m_homeRequested) requestHomeSections();
     });
 }
 
 void EmbyClient::loadHome() {
+    m_homeRequested = true;
+    requestHomeSections();
     loadItems({{"Recursive", "true"}, {"Filters", "IsNotFolder"},
-               {"IncludeItemTypes", "Movie,Series,MusicVideo,Video"}});
+               {"IncludeItemTypes", "Movie,Series,MusicVideo,Video"},
+               {"SortBy", "DateCreated"}, {"SortOrder", "Descending"}});
+}
+
+void EmbyClient::requestHomeSections() {
+    const int generation = ++m_homeGeneration;
+    QVariantList sections;
+    for (const auto &value : m_libraries) {
+        const QVariantMap library = value.toMap();
+        const QString type = library.value("type").toString();
+        QString includeTypes;
+        if (type == "movies") includeTypes = "Movie";
+        else if (type == "tvshows") includeTypes = "Series";
+        else if (type == "musicvideos") includeTypes = "MusicVideo";
+        else if (type == "homevideos") includeTypes = "Video";
+        else if (type == "mixed" || type.isEmpty()) includeTypes = "Movie,Series,MusicVideo,Video";
+        else continue;
+        sections << QVariantMap{{"id", library.value("id")}, {"name", library.value("name")},
+                                {"type", type}, {"items", QVariantList{}}};
+    }
+    m_homeSections = sections;
+    emit homeSectionsChanged();
+
+    for (int index = 0; index < sections.size(); ++index) {
+        const QVariantMap section = sections.at(index).toMap();
+        QVariantMap params{{"ParentId", section.value("id")}, {"Recursive", "true"},
+                           {"Filters", "IsNotFolder"}, {"IncludeItemTypes", includeTypes},
+                           {"SortBy", "DateCreated"}, {"SortOrder", "Descending"},
+                           {"StartIndex", 0}, {"Limit", 12},
+                           {"Fields", "Overview,UserData,Genres,DateCreated"},
+                           {"ImageTypeLimit", 1}};
+        if (section.value("type").toString() == "mixed")
+            params.remove("IncludeItemTypes"), params.insert("ExcludeItemTypes", "Episode,Season");
+        QUrl url(m_server + "/emby/Users/" + m_uid + "/Items");
+        QUrlQuery query;
+        for (auto i = params.cbegin(); i != params.cend(); ++i)
+            query.addQueryItem(i.key(), i.value().toString());
+        url.setQuery(query);
+        QNetworkRequest request(url);
+        request.setRawHeader("X-Emby-Token", m_token.toUtf8());
+        auto *reply = net.get(request);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, generation, index] {
+            const QByteArray body = reply->readAll();
+            const auto error = reply->error();
+            const QString errorText = reply->errorString();
+            reply->deleteLater();
+            if (generation != m_homeGeneration) return;
+            if (error != QNetworkReply::NoError) {
+                m_error = errorText;
+                emit errorChanged();
+                return;
+            }
+            const QJsonArray values = QJsonDocument::fromJson(body).object().value("Items").toArray();
+            QVariantList items;
+            for (const auto &value : values) items << mapItem(value.toObject());
+            if (index < 0 || index >= m_homeSections.size()) return;
+            QVariantMap updated = m_homeSections.at(index).toMap();
+            updated.insert("items", items);
+            m_homeSections[index] = updated;
+            emit homeSectionsChanged();
+        });
+    }
 }
 
 void EmbyClient::loadSeriesEpisodes(QString seriesId) {
-    loadItems({{"__Endpoint", "SeriesEpisodes"}, {"ParentId", seriesId},
-               {"Recursive", "true"}, {"IncludeItemTypes", "Episode"}});
+    loadItems({{"__Endpoint", "SeriesEpisodes"}, {"__SeriesId", seriesId},
+               {"UserId", m_uid}, {"Recursive", "true"}, {"IncludeItemTypes", "Episode"},
+               {"SortBy", "ParentIndexNumber,IndexNumber"}, {"SortOrder", "Ascending"}});
 }
 
 void EmbyClient::load(QString type) {
@@ -183,6 +248,28 @@ void EmbyClient::loadMore() {
     loadItems(m_currentQuery, true);
 }
 
+QVariantMap EmbyClient::mapItem(const QJsonObject &x) const {
+    const QString id = x.value("Id").toString();
+    const auto tags = x.value("ImageTags").toObject();
+    const auto backdrops = x.value("BackdropImageTags").toArray();
+    const QString token = "?X-Emby-Token=" + QString::fromLatin1(QUrl::toPercentEncoding(m_token));
+    return QVariantMap{
+        {"id", id}, {"name", x.value("Name").toString()}, {"type", x.value("Type").toString()},
+        {"overview", x.value("Overview").toString()},
+        {"year", x.value("ProductionYear").toInt()},
+        {"seasonNumber", x.value("ParentIndexNumber").toInt()},
+        {"episodeNumber", x.value("IndexNumber").toInt()},
+        {"rating", x.value("CommunityRating").toDouble()},
+        {"favorite", x.value("UserData").toObject().value("IsFavorite").toBool()},
+        {"image", m_server + "/emby/Items/" + id + "/Images/Primary" + token},
+        {"backdrop", backdrops.isEmpty() ? QString() :
+            m_server + "/emby/Items/" + id + "/Images/Backdrop/0" + token},
+        {"hasBackdrop", !backdrops.isEmpty()},
+        {"genres", x.value("Genres").toArray().toVariantList()},
+        {"hasPoster", tags.contains("Primary")}
+    };
+}
+
 void EmbyClient::loadItems(QVariantMap params, bool append) {
     if (append) {
         params = m_currentQuery;
@@ -193,18 +280,22 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
         emit hasMoreChanged();
     }
     const QString endpoint = params.take("__Endpoint").toString();
+    const QString seriesId = params.take("__SeriesId").toString();
     const int startIndex = append ? m_nextStart : 0;
     params.insert("StartIndex", startIndex);
     params.insert("SortBy", params.value("SortBy", "DateCreated"));
-    params.insert("SortOrder", "Descending");
+    params.insert("SortOrder", params.value("SortOrder",
+        endpoint == "SeriesEpisodes" ? "Ascending" : "Descending"));
     params.insert("Fields", "Overview,UserData,Genres");
     params.insert("ImageTypeLimit", "1");
     params.insert("Limit", "48");
     const int generation = ++m_itemsGeneration;
     m_loading = true;
     emit loadingChanged();
-    const QString path = "/emby/Users/" + m_uid + "/Items" +
-                         (endpoint == "Resume" ? "/Resume" : "");
+    QString path = "/emby/Users/" + m_uid + "/Items" +
+                   (endpoint == "Resume" ? "/Resume" : "");
+    if (endpoint == "SeriesEpisodes")
+        path = "/emby/Shows/" + seriesId + "/Episodes";
     const bool allowEpisodes = endpoint == "Resume" || endpoint == "SeriesEpisodes";
     get(path, params, [this, generation, startIndex, append, allowEpisodes](QJsonObject o) {
         if (generation != m_itemsGeneration) return;
@@ -217,23 +308,7 @@ void EmbyClient::loadItems(QVariantMap params, bool append) {
             const auto x = v.toObject();
             const QString mediaType = x.value("Type").toString();
             if (mediaType == "Season" || (mediaType == "Episode" && !allowEpisodes)) continue;
-            const QString id = x.value("Id").toString();
-            const auto tags = x.value("ImageTags").toObject();
-            const auto backdrops = x.value("BackdropImageTags").toArray();
-            const QString token = "?X-Emby-Token=" + QString::fromLatin1(QUrl::toPercentEncoding(m_token));
-            m_items << QVariantMap{
-                {"id", id}, {"name", x.value("Name").toString()}, {"type", mediaType},
-                {"overview", x.value("Overview").toString()},
-                {"year", x.value("ProductionYear").toInt()},
-                {"rating", x.value("CommunityRating").toDouble()},
-                {"favorite", x.value("UserData").toObject().value("IsFavorite").toBool()},
-                {"image", m_server + "/emby/Items/" + id + "/Images/Primary" + token},
-                {"backdrop", backdrops.isEmpty() ? QString() :
-                    m_server + "/emby/Items/" + id + "/Images/Backdrop/0" + token},
-                {"hasBackdrop", !backdrops.isEmpty()},
-                {"genres", x.value("Genres").toArray().toVariantList()},
-                {"hasPoster", tags.contains("Primary")}
-            };
+            m_items << mapItem(x);
         }
         m_nextStart = startIndex + o.value("Items").toArray().size();
         emit itemsChanged();
