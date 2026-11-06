@@ -38,16 +38,21 @@ jobs:
           Get-ChildItem mpv-sdk -Recurse -Filter *.dll | Copy-Item -Destination dist/ -Force
           windeployqt --qmldir qml dist/SuEmby.exe
           if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
-      - name: Smoke test application startup
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath (Resolve-Path dist/SuEmby.exe) -PassThru
-          Start-Sleep -Seconds 8
-          $p.Refresh()
-          if ($p.HasExited) { throw "SuEmby exited during startup with code $($p.ExitCode)" }
-          Stop-Process -Id $p.Id -Force
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
+      - name: Install and launch packaged application
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path Output/SuEmby-Setup.exe).Path
+          $install = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer returned $($install.ExitCode)" }
+          $exe = Join-Path $env:ProgramFiles 'SuEmby/SuEmby.exe'
+          if (-not (Test-Path $exe)) { throw "Installed executable missing: $exe" }
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) { throw "Installed app exited on startup with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
       - uses: actions/upload-artifact@v4
         with:
           name: SuEmby-Setup
