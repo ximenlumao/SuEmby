@@ -44,7 +44,7 @@ jobs:
       - name: Bundle Vulkan loader
         shell: pwsh
         run: |
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-runtime-components.zip -OutFile vulkan-runtime.zip
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/VulkanRT-X64-1.4.363.0-Components.zip -OutFile vulkan-runtime.zip
           Expand-Archive vulkan-runtime.zip -DestinationPath vulkan-runtime
           $loader = Get-ChildItem vulkan-runtime -Recurse -Filter vulkan-1.dll | Select-Object -First 1
           if (-not $loader) { throw 'Official Vulkan runtime archive did not contain vulkan-1.dll' }
