@@ -596,7 +596,7 @@ ApplicationWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Button {
+                        TactileButton {
                             text: root.selectedItem && root.selectedItem.favorite ? "♥ 已收藏" : "♡ 收藏"
                             onClicked: if (root.selectedItem) {
                                 root.selectedItem.favorite = !root.selectedItem.favorite
