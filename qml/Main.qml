@@ -225,18 +225,14 @@ ApplicationWindow {
                 Item { height: 10 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Button {
+                    TactileButton {
                         Layout.fillWidth: true
                         text: emby.userId.length ? "切换账号" : "连接服务器"
                         onClicked: loginDialog.open()
-                        background: Rectangle { radius: 10; color: root.subtlePanel }
-                        contentItem: Text { text: parent.text; color: root.ink; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     }
-                    Button {
+                    TactileButton {
                         text: root.isLight ? "☾" : "☼"
                         onClicked: root.isLight = !root.isLight
-                        background: Rectangle { radius: 10; color: root.subtlePanel }
-                        contentItem: Text { text: parent.text; color: root.ink; font.pixelSize: 17; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     }
                 }
             }
@@ -285,11 +281,16 @@ ApplicationWindow {
                             Text { text: "↵"; color: root.muted; font.pixelSize: 12 }
                         }
                     }
-                    Button {
-                        text: "⟳"
-                        onClicked: root.loadSection(sectionTitle.text === "首页" ? "首页" : sectionTitle.text)
-                        background: Rectangle { radius: 11; color: root.panel }
-                        contentItem: Text { text: parent.text; color: root.muted; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    TactileButton {
+                        text: "↻"
+                        onClicked: {
+                            if (sectionTitle.text === "首页") root.loadSection("首页")
+                            else if (emby.libraries.length) {
+                                for (var i = 0; i < emby.libraries.length; ++i)
+                                    if (emby.libraries[i].name === sectionTitle.text)
+                                        root.loadLibrary(emby.libraries[i].id, emby.libraries[i].name, emby.libraries[i].type)
+                            }
+                        }
                     }
                 }
 
@@ -383,19 +384,16 @@ ApplicationWindow {
                             }
                             Row {
                                 spacing: 10
-                                Button {
-                                    text: "▶  立即播放"
-                                    enabled: emby.items.length > 0
+                                TactileButton {
+                                    accent: true
+                                    text: root.playPending ? "正在连接…" : "▶  立即播放"
+                                    enabled: emby.items.length > 0 && !root.playPending
                                     onClicked: root.playItem(emby.items[0])
-                                    background: Rectangle { radius: 10; color: "#f5f6f8" }
-                                    contentItem: Text { text: parent.text; color: "#171a20"; font.pixelSize: 12; font.bold: true; leftPadding: 14; rightPadding: 14; verticalAlignment: Text.AlignVCenter }
                                 }
-                                Button {
+                                TactileButton {
                                     text: "查看详情"
                                     enabled: emby.items.length > 0
                                     onClicked: root.openDetails(emby.items[0])
-                                    background: Rectangle { radius: 10; color: "#88343a46"; border.color: "#526071"; border.width: 1 }
-                                    contentItem: Text { text: parent.text; color: root.ink; font.pixelSize: 12; leftPadding: 12; rightPadding: 12; verticalAlignment: Text.AlignVCenter }
                                 }
                             }
                         }
@@ -546,12 +544,11 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
-                Button { text: "取消"; onClicked: loginDialog.close() }
-                Button {
+                TactileButton { text: "取消"; onClicked: loginDialog.close() }
+                TactileButton {
+                    accent: true
                     text: "连接"
                     onClicked: emby.login(serverField.text, userField.text, passwordField.text)
-                    background: Rectangle { radius: 9; color: "#4b86f7" }
-                    contentItem: Text { text: parent.text; color: "white"; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; leftPadding: 14; rightPadding: 14 }
                 }
             }
         }
@@ -652,11 +649,10 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Text { text: root.currentTitle; color: "#f5f6f8"; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                         Text { text: "MPV"; color: "#8792a6"; font.pixelSize: 10; font.bold: true }
-                        Button {
+                        TactileButton {
                             text: "×"
+                            Layout.preferredWidth: 42
                             onClicked: playerDialog.close()
-                            background: Rectangle { radius: 8; color: "#252a33" }
-                            contentItem: Text { text: parent.text; color: "#e5e8ed"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         }
                     }
                     Rectangle {
