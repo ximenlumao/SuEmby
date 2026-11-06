@@ -1,6 +1,22 @@
 #include "player.h"
 #include <QTimer>
+#include <QVariantMap>
+#include <mpv/render.h>
 
+namespace {
+const mpv_node *mapValue(const mpv_node_list *list, const char *key) {
+    if (!list || !key) return nullptr;
+    for (int i = 0; i < list->num; ++i)
+        if (list->keys[i] && qstrcmp(list->keys[i], key) == 0)
+            return &list->values[i];
+    return nullptr;
+}
+
+QString nodeText(const mpv_node *node) {
+    return node && node->format == MPV_FORMAT_STRING && node->u.string
+        ? QString::fromUtf8(node->u.string) : QString();
+}
+}
 Player::Player(QObject *parent) : QObject(parent) {
     m = mpv_create();
     if (!m) return;
@@ -41,6 +57,18 @@ void Player::stop() {
     emit changed();
 }
 
+void Player::setAudioTrack(int id) {
+    if (!m) return;
+    const int64_t track = id;
+    mpv_set_property(m, "aid", MPV_FORMAT_INT64, &track);
+}
+
+void Player::setSubtitleTrack(int id) {
+    if (!m) return;
+    const int64_t track = id;
+    mpv_set_property(m, "sid", MPV_FORMAT_INT64, &track);
+}
+
 void Player::pause() {
     if (!m) return;
     int paused = 0;
@@ -70,5 +98,36 @@ void Player::poll() {
         m_position = position;
     if (mpv_get_property(m, "duration", MPV_FORMAT_DOUBLE, &duration) >= 0)
         m_duration = duration;
+
+    mpv_node tracks{};
+    if (mpv_get_property(m, "track-list", MPV_FORMAT_NODE, &tracks) >= 0 &&
+        tracks.format == MPV_FORMAT_NODE_ARRAY && tracks.u.list) {
+        QVariantList audio;
+        QVariantList subtitles;
+        subtitles << QVariantMap{{"id", -1}, {"label", "关闭字幕"}, {"selected", false}};
+        for (int i = 0; i < tracks.u.list->num; ++i) {
+            const mpv_node &entry = tracks.u.list->values[i];
+            if (entry.format != MPV_FORMAT_NODE_MAP || !entry.u.list) continue;
+            const QString type = nodeText(mapValue(entry.u.list, "type"));
+            const mpv_node *idNode = mapValue(entry.u.list, "id");
+            const mpv_node *titleNode = mapValue(entry.u.list, "title");
+            const mpv_node *langNode = mapValue(entry.u.list, "lang");
+            const mpv_node *selectedNode = mapValue(entry.u.list, "selected");
+            if (!idNode || idNode->format != MPV_FORMAT_INT64) continue;
+            const int id = static_cast<int>(idNode->u.int64);
+            QString label = nodeText(titleNode);
+            const QString language = nodeText(langNode);
+            if (label.isEmpty()) label = language.isEmpty() ? QString("轨道 %1").arg(id) : language;
+            else if (!language.isEmpty()) label += " · " + language;
+            const bool selected = selectedNode && selectedNode->format == MPV_FORMAT_FLAG &&
+                                  selectedNode->u.flag != 0;
+            const QVariantMap item{{"id", id}, {"label", label}, {"selected", selected}};
+            if (type == "audio") audio << item;
+            else if (type == "sub") subtitles << item;
+        }
+        m_audioTracks = audio;
+        m_subtitleTracks = subtitles;
+        mpv_free_node_contents(&tracks);
+    }
     emit changed();
 }
