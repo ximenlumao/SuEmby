@@ -39,7 +39,7 @@ jobs:
           cmake --install build --config Release --prefix dist
           Copy-Item $env:MPV_RUNTIME dist/
           Get-ChildItem mpv-sdk,mpv-runtime -Recurse -Filter *.dll | Copy-Item -Destination dist/ -Force
-          windeployqt --qmldir qml dist/SuEmby.exe
+          windeployqt --compiler-runtime --qmldir qml dist/SuEmby.exe
           if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
