@@ -65,7 +65,7 @@ void Player::setAudioTrack(int id) {
 
 void Player::setSubtitleTrack(int id) {
     if (!m) return;
-    const int64_t track = id;
+    int64_t track = id;
     mpv_set_property(m, "sid", MPV_FORMAT_INT64, &track);
 }
 
