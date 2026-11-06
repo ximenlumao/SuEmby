@@ -510,7 +510,10 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Button {
                             text: root.selectedItem && root.selectedItem.favorite ? "♥ 已收藏" : "♡ 收藏"
-                            onClicked: if (root.selectedItem) emby.setFavorite(root.selectedItem.id, !root.selectedItem.favorite)
+                            onClicked: if (root.selectedItem) {
+                                root.selectedItem.favorite = !root.selectedItem.favorite
+                                emby.setFavorite(root.selectedItem.id, root.selectedItem.favorite)
+                            }
                         }
                         Item { Layout.fillWidth: true }
                         Button { text: "关闭"; onClicked: detailsDialog.close() }
@@ -667,6 +670,15 @@ ApplicationWindow {
         passwordField.text = emby.savedPassword
         if (emby.savedServer.length && emby.savedPassword.length) emby.restoreSession()
         else loginDialog.open()
+    }
+    Connections {
+        target: mpv
+        function onChanged() {
+            if (mpv.playing && mpv.duration > 0 && mpv.position >= mpv.duration - 1.2) {
+                emby.stopPlayback(mpv.duration, mpv.duration)
+                mpv.stop()
+            }
+        }
     }
     Connections {
         target: emby
