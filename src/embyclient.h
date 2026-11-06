@@ -33,6 +33,7 @@ public:
     Q_INVOKABLE void login(QString, QString, QString);
     Q_INVOKABLE void refreshLibraries();
     Q_INVOKABLE void load(QString type = "Movie");
+    Q_INVOKABLE void loadHome();
     Q_INVOKABLE void loadLibrary(QString id, QString collectionType = QString());
     Q_INVOKABLE void search(QString);
     Q_INVOKABLE void loadSpecial(QString mode);
