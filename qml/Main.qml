@@ -295,6 +295,39 @@ ApplicationWindow {
 
                 Item {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 38
+                    visible: sectionTitle.text === "首页" && emby.libraries.length > 0
+                    ListView {
+                        anchors.fill: parent
+                        orientation: ListView.Horizontal
+                        spacing: 9
+                        clip: true
+                        model: emby.libraries
+                        delegate: Rectangle {
+                            width: Math.max(112, libraryName.implicitWidth + 42)
+                            height: 34
+                            radius: 10
+                            color: categoryHover.pressed ? "#34496a" : (categoryHover.containsMouse ? "#263348" : root.panel)
+                            border.color: categoryHover.containsMouse ? "#587bad" : "#252b37"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Text { text: modelData.type === "tvshows" ? "▤" : (modelData.type === "movies" ? "▣" : "◈"); color: "#89b4ff"; font.pixelSize: 14 }
+                                Text { id: libraryName; text: modelData.name; color: root.ink; font.pixelSize: 11; font.bold: true }
+                            }
+                            MouseArea {
+                                id: categoryHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.loadLibrary(modelData.id, modelData.name, modelData.type)
+                            }
+                        }
+                    }
+                }
+                Item {
+                    Layout.fillWidth: true
                     Layout.preferredHeight: 310
                     clip: true
                     Rectangle {
@@ -586,8 +619,7 @@ ApplicationWindow {
                             text: root.playPending ? "正在连接…" : "▶  播放"
                             enabled: !root.playPending
                             onClicked: { root.playItem(root.selectedItem); if (root.selectedItem && root.selectedItem.type !== "Series") detailsDialog.close() }
-                            background: Rectangle { radius: 9; color: "#4b86f7" }
-                            contentItem: Text { text: parent.text; color: "white"; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; leftPadding: 13; rightPadding: 13 }
+                            }
                         }
                     }
                 }
@@ -838,6 +870,31 @@ ApplicationWindow {
         }
     }
 
+    Popup {
+        id: feedbackToast
+        parent: Overlay.overlay
+        x: Math.round((root.width - width) / 2)
+        y: root.height - height - 24
+        width: Math.min(520, root.width - 40)
+        height: 50
+        padding: 0
+        closePolicy: Popup.NoAutoClose
+        background: Rectangle { radius: 13; color: "#222a37"; border.color: "#46536a" }
+        contentItem: Text {
+            text: root.feedbackText
+            color: "#f0f3f8"
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            leftPadding: 14; rightPadding: 14
+        }
+    }
+    Timer {
+        id: feedbackTimer
+        interval: 3600
+        onTriggered: feedbackToast.close()
+    }
     Player { id: mpv }
     Timer {
         interval: 10000
@@ -855,6 +912,11 @@ ApplicationWindow {
     Connections {
         target: mpv
         function onChanged() {
+            if (mpv.error.length && mpv.error !== root.lastMpvError) {
+                root.lastMpvError = mpv.error
+                root.playPending = false
+                root.showFeedback("MPV 播放失败：" + mpv.error)
+            }
             if (mpv.playing && mpv.duration > 0 && mpv.position >= mpv.duration - 1.2) {
                 emby.stopPlayback(mpv.duration, mpv.duration)
                 mpv.stop()
