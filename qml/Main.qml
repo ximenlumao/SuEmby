@@ -119,8 +119,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                if (modelData.label === "首页") root.loadSection("电影")
-                                else root.loadSection(modelData.label)
+                                root.loadSection(modelData.label)
                             }
                         }
                     }
