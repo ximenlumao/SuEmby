@@ -13,6 +13,7 @@ public:
     ~Player();
     double position() const { return m_position; }
     double duration() const { return m_duration; }
+    mpv_handle *handle() const { return m; }
     Q_INVOKABLE void play(const QString &url);
     Q_INVOKABLE void pause();
     Q_INVOKABLE void stop();
