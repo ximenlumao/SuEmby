@@ -153,7 +153,7 @@ void EmbyClient::requestHomeSections() {
         else if (type == "mixed" || type.isEmpty()) includeTypes = "Movie,Series,MusicVideo,Video";
         else continue;
         sections << QVariantMap{{"id", library.value("id")}, {"name", library.value("name")},
-                                {"type", type}, {"items", QVariantList{}}};
+                                {"type", type}, {"items", QVariantList{}}, {"loading", true}}};
     }
     m_homeSections = sections;
     emit homeSectionsChanged();
@@ -184,16 +184,19 @@ void EmbyClient::requestHomeSections() {
             const QString errorText = reply->errorString();
             reply->deleteLater();
             if (generation != m_homeGeneration) return;
+            if (index < 0 || index >= m_homeSections.size()) return;
+            QVariantMap updated = m_homeSections.at(index).toMap();
+            updated.insert("loading", false);
             if (error != QNetworkReply::NoError) {
                 m_error = errorText;
                 emit errorChanged();
+                m_homeSections[index] = updated;
+                emit homeSectionsChanged();
                 return;
             }
             const QJsonArray values = QJsonDocument::fromJson(body).object().value("Items").toArray();
             QVariantList items;
             for (const auto &value : values) items << mapItem(value.toObject());
-            if (index < 0 || index >= m_homeSections.size()) return;
-            QVariantMap updated = m_homeSections.at(index).toMap();
             updated.insert("items", items);
             m_homeSections[index] = updated;
             emit homeSectionsChanged();
