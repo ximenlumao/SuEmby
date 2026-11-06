@@ -2,7 +2,6 @@
 #include <QTimer>
 #include <QVariantMap>
 #include <mpv/render.h>
-#include <mpv/error.h>
 
 namespace {
 const mpv_node *mapValue(const mpv_node_list *list, const char *key) {
