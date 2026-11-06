@@ -9,6 +9,7 @@ class EmbyClient : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantList libraries READ libraries NOTIFY librariesChanged)
+    Q_PROPERTY(QVariantList homeSections READ homeSections NOTIFY homeSectionsChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(bool hasMore READ hasMore NOTIFY hasMoreChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
@@ -21,6 +22,7 @@ public:
     using QObject::QObject;
     QVariantList items() const { return m_items; }
     QVariantList libraries() const { return m_libraries; }
+    QVariantList homeSections() const { return m_homeSections; }
     bool loading() const { return m_loading; }
     bool hasMore() const { return m_nextStart < m_total; }
     QString error() const { return m_error; }
@@ -46,6 +48,7 @@ public:
 signals:
     void itemsChanged();
     void librariesChanged();
+    void homeSectionsChanged();
     void loadingChanged();
     void hasMoreChanged();
     void sessionChanged();
@@ -56,14 +59,18 @@ private:
     QNetworkAccessManager net;
     QString m_server, m_token, m_uid, m_error;
     QString m_playbackItemId, m_mediaSourceId, m_playSessionId;
-    QVariantList m_items, m_libraries;
+    QVariantList m_items, m_libraries, m_homeSections;
     QVariantMap m_currentQuery;
     int m_nextStart = 0;
     int m_total = 0;
     int m_itemsGeneration = 0;
+    int m_homeGeneration = 0;
+    bool m_homeRequested = false;
     bool m_loading = false;
     void get(QString, QVariantMap, std::function<void(QJsonObject)>);
     void authenticate(QString server, QString username, QString password);
     void loadItems(QVariantMap params, bool append = false);
+    void requestHomeSections();
+    QVariantMap mapItem(const QJsonObject &item) const;
     void post(QString path, QJsonObject body = {});
 };
