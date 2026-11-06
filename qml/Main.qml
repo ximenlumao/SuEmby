@@ -331,6 +331,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 310
                     clip: true
+                    visible: sectionTitle.text === "首页"
                     Rectangle {
                         anchors.fill: parent
                         radius: 20
@@ -400,8 +401,114 @@ ApplicationWindow {
                     }
                 }
 
+                ScrollView {
+                    id: homeLibraryScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: sectionTitle.text === "首页"
+                    clip: true
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    Column {
+                        id: homeLibraryRows
+                        width: homeLibraryScroll.availableWidth
+                        spacing: 20
+                        Repeater {
+                            model: emby.homeSections
+                            delegate: Column {
+                                width: homeLibraryRows.width
+                                spacing: 10
+                                RowLayout {
+                                    width: parent.width
+                                    Text { text: modelData.name; color: root.ink; font.pixelSize: 17; font.bold: true }
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        id: homeSeeAll
+                                        text: "查看全部  ›"
+                                        color: "#89b4ff"
+                                        font.pixelSize: 11
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            anchors.margins: -8
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.loadLibrary(modelData.id, modelData.name, modelData.type)
+                                        }
+                                    }
+                                }
+                                Item {
+                                    width: parent.width
+                                    height: 224
+                                    ListView {
+                                        anchors.fill: parent
+                                        orientation: ListView.Horizontal
+                                        spacing: 13
+                                        clip: true
+                                        model: modelData.items
+                                        delegate: Item {
+                                            width: 142
+                                            height: 222
+                                            Column {
+                                                anchors.fill: parent
+                                                spacing: 7
+                                                Rectangle {
+                                                    width: parent.width
+                                                    height: 178
+                                                    radius: 12
+                                                    color: root.subtlePanel
+                                                    clip: true
+                                                    Image {
+                                                        anchors.fill: parent
+                                                        source: modelData.image
+                                                        fillMode: Image.PreserveAspectCrop
+                                                        asynchronous: true
+                                                        cache: true
+                                                    }
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        color: "#000000"
+                                                        opacity: homeCardMouse.containsMouse ? 0.18 : 0
+                                                        Behavior on opacity { NumberAnimation { duration: 120 } }
+                                                    }
+                                                    MouseArea {
+                                                        id: homeCardMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: root.openDetails(modelData)
+                                                    }
+                                                }
+                                                Text {
+                                                    width: parent.width
+                                                    text: modelData.name
+                                                    color: root.ink
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+                                                Text {
+                                                    width: parent.width
+                                                    text: modelData.year ? String(modelData.year) : ""
+                                                    color: root.muted
+                                                    font.pixelSize: 10
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: modelData.items.length === 0
+                                        text: "这个媒体库暂时没有可显示的影片"
+                                        color: root.muted
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
+                    visible: sectionTitle.text !== "首页"
                     Text { text: searchBox.text.length ? "搜索结果" : "最近添加"; color: root.ink; font.pixelSize: 17; font.bold: true }
                     Item { Layout.fillWidth: true }
                     Text { text: emby.loading ? "正在加载…" : (emby.items.length ? emby.items.length + " 项" : ""); color: root.muted; font.pixelSize: 11 }
@@ -410,6 +517,7 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    visible: sectionTitle.text !== "首页"
                     ListView {
                         id: posters
                         anchors.fill: parent
@@ -493,7 +601,9 @@ ApplicationWindow {
                                 }
                                 Text {
                                     width: parent.width
-                                    text: modelData.year ? String(modelData.year) : ""
+                                    text: modelData.type === "Episode" ?
+                                        ("第 " + modelData.seasonNumber + " 季  ·  第 " + modelData.episodeNumber + " 集") :
+                                        (modelData.year ? String(modelData.year) : "")
                                     color: root.muted
                                     font.pixelSize: 10
                                 }
