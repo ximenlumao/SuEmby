@@ -910,12 +910,12 @@ ApplicationWindow {
                             onClicked: mpv.seek(Math.min(mpv.duration, mpv.position + 10))
                         }
                         Item { Layout.fillWidth: true }
-                        Text { text: "音量"; color: "#9ca8bb"; font.pixelSize: 11 }
+                        Text { text: "音量 " + Math.round(mpv.volumeLevel) + "%"; color: "#9ca8bb"; font.pixelSize: 11 }
                         Slider {
                             id: volumeSlider
-                            from: 0; to: 100; value: 80
-                            Layout.preferredWidth: 120
-                            onMoved: mpv.volume(value)
+                            from: 0; to: 100; value: mpv.volumeLevel
+                            Layout.preferredWidth: 150
+                            onMoved: mpv.setVolume(value)
                             background: Rectangle {
                                 x: volumeSlider.leftPadding
                                 y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
@@ -932,6 +932,11 @@ ApplicationWindow {
                                 color: "#e7edf8"
                                 border.color: "#829fe0"
                             }
+                        }
+                    }
+                        TactileButton {
+                            text: "旋转 90°"
+                            onClicked: mpv.rotateVideo()
                         }
                     }
                     RowLayout {
