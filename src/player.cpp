@@ -59,7 +59,7 @@ void Player::stop() {
 
 void Player::setAudioTrack(int id) {
     if (!m) return;
-    const int64_t track = id;
+    int64_t track = id;
     mpv_set_property(m, "aid", MPV_FORMAT_INT64, &track);
 }
 
