@@ -657,50 +657,117 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Slider {
-                        id: seekSlider
+                    Item {
+                        id: seekBar
                         Layout.fillWidth: true
-                        from: 0
-                        to: Math.max(1, mpv.duration)
-                        value: seekSlider.pressed ? seekSlider.previewValue : mpv.position
-                        property real previewValue: mpv.position
-                        onPressedChanged: {
-                            if (pressed) previewValue = value
-                            else {
-                                mpv.seek(previewValue)
-                                emby.reportPlaybackProgress(previewValue, mpv.duration, "TimeUpdate")
+                        height: 24
+                        property real preview: mpv.position
+                        property bool dragging: false
+                        property real ratio: mpv.duration > 0 ? Math.max(0, Math.min(1, (dragging ? preview : mpv.position) / mpv.duration)) : 0
+                        function seekAt(x) {
+                            if (mpv.duration <= 0 || width <= 0) return
+                            preview = Math.max(0, Math.min(1, x / width)) * mpv.duration
+                            mpv.seek(preview)
+                        }
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: 5
+                            radius: 3
+                            color: "#303746"
+                            Rectangle {
+                                width: seekBar.width * seekBar.ratio
+                                height: parent.height
+                                radius: 3
+                                color: "#6e9eff"
                             }
                         }
-                        onMoved: previewValue = value
-                        background: Rectangle {
-                            x: seekSlider.leftPadding
-                            y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2
-                            width: seekSlider.availableWidth
-                            height: 4
-                            radius: 2
-                            color: "#323743"
-                            Rectangle { width: seekSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: "#6e9eff" }
+                        Rectangle {
+                            width: 13; height: 13; radius: 7
+                            x: Math.max(0, Math.min(parent.width - width, seekBar.width * seekBar.ratio - width / 2))
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: seekMouse.containsMouse || seekMouse.pressed ? "#ffffff" : "#d4e1ff"
+                            border.color: "#6e9eff"
+                            border.width: 2
+                            scale: seekMouse.pressed ? 1.18 : 1
+                            Behavior on scale { NumberAnimation { duration: 90 } }
                         }
-                        handle: Rectangle { x: seekSlider.leftPadding + seekSlider.visualPosition * (seekSlider.availableWidth - width); y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2; width: 12; height: 12; radius: 6; color: "#f2f5fb"; border.color: "#6e9eff" }
+                        MouseArea {
+                            id: seekMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onPressed: { seekBar.dragging = true; seekBar.seekAt(mouse.x) }
+                            onPositionChanged: if (pressed) seekBar.seekAt(mouse.x)
+                            onReleased: {
+                                seekBar.seekAt(mouse.x)
+                                seekBar.dragging = false
+                                emby.reportPlaybackProgress(seekBar.preview, mpv.duration, "TimeUpdate", mpv.paused)
+                            }
+                            onCanceled: seekBar.dragging = false
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: root.timeText(mpv.position) + " / " + root.timeText(mpv.duration); color: "#aab2c1"; font.pixelSize: 10 }
+                        spacing: 10
+                        Text {
+                            text: root.timeText(mpv.position) + "  /  " + root.timeText(mpv.duration)
+                            color: "#aab2c1"
+                            font.pixelSize: 11
+                            font.family: "Segoe UI"
+                        }
                         Item { Layout.fillWidth: true }
-                        Button { text: "−10 秒"; onClicked: mpv.seek(Math.max(0, mpv.position - 10)) }
-                        Button {
-                            text: mpv.paused ? "▶ 播放" : "Ⅱ 暂停"
+                        TactileButton {
+                            text: "↶ 10"
+                            onClicked: mpv.seek(Math.max(0, mpv.position - 10))
+                        }
+                        TactileButton {
+                            accent: true
+                            text: mpv.paused ? "▶  播放" : "Ⅱ  暂停"
                             onClicked: {
                                 mpv.pause()
-                                emby.reportPlaybackProgress(mpv.position, mpv.duration, mpv.paused ? "Pause" : "Unpause", mpv.paused)
+                                emby.reportPlaybackProgress(mpv.position, mpv.duration,
+                                    mpv.paused ? "Pause" : "Unpause", mpv.paused)
                             }
                         }
-                        Button { text: "+10 秒"; onClicked: mpv.seek(Math.min(mpv.duration, mpv.position + 10)) }
-                        Text { text: "音轨"; color: "#aab2c1"; font.pixelSize: 10 }
+                        TactileButton {
+                            text: "10 ↷"
+                            onClicked: mpv.seek(Math.min(mpv.duration, mpv.position + 10))
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text { text: "音量"; color: "#9ca8bb"; font.pixelSize: 11 }
+                        Slider {
+                            id: volumeSlider
+                            from: 0; to: 100; value: 80
+                            Layout.preferredWidth: 120
+                            onMoved: mpv.volume(value)
+                            background: Rectangle {
+                                x: volumeSlider.leftPadding
+                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+                                width: volumeSlider.availableWidth
+                                height: 4
+                                radius: 2
+                                color: "#303746"
+                                Rectangle { width: volumeSlider.visualPosition * parent.width; height: parent.height; radius: 2; color: "#829fe0" }
+                            }
+                            handle: Rectangle {
+                                x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
+                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+                                width: 12; height: 12; radius: 6
+                                color: "#e7edf8"
+                                border.color: "#829fe0"
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Item { Layout.fillWidth: true }
+                        Text { text: "音轨"; color: "#9ca8bb"; font.pixelSize: 11 }
                         ComboBox {
                             id: audioSelector
-                            Layout.preferredWidth: 150
+                            Layout.preferredWidth: 190
                             model: mpv.audioTracks
                             textRole: "label"
                             currentIndex: {
@@ -708,12 +775,33 @@ ApplicationWindow {
                                     if (mpv.audioTracks[i].selected) return i
                                 return mpv.audioTracks.length ? 0 : -1
                             }
-                            onActivated: mpv.setAudioTrack(mpv.audioTracks[index].id)
+                            onActivated: {
+                                mpv.setAudioTrack(mpv.audioTracks[index].id)
+                                emby.reportPlaybackProgress(mpv.position, mpv.duration, "AudioTrackChange", mpv.paused)
+                            }
+                            contentItem: Text {
+                                leftPadding: 12; rightPadding: 30
+                                text: audioSelector.displayText || "选择音轨"
+                                color: "#e5eaf2"; font.pixelSize: 11
+                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                            }
+                            background: Rectangle {
+                                radius: 9; color: audioSelector.down ? "#303b4c" : "#1c222d"
+                                border.color: audioSelector.hovered ? "#718bb8" : "#343c49"
+                            }
+                            delegate: ItemDelegate {
+                                width: audioSelector.width
+                                text: modelData.label
+                                highlighted: audioSelector.highlightedIndex === index
+                                contentItem: Text { text: parent.text; color: "#e8edf5"; font.pixelSize: 11; verticalAlignment: Text.AlignVCenter; leftPadding: 10 }
+                                background: Rectangle { color: parent.highlighted ? "#34445f" : "#171c25"; radius: 6 }
+                            }
+                            popup.background: Rectangle { radius: 10; color: "#171c25"; border.color: "#343c49" }
                         }
-                        Text { text: "字幕"; color: "#aab2c1"; font.pixelSize: 10 }
+                        Text { text: "字幕"; color: "#9ca8bb"; font.pixelSize: 11 }
                         ComboBox {
                             id: subtitleSelector
-                            Layout.preferredWidth: 170
+                            Layout.preferredWidth: 210
                             model: mpv.subtitleTracks
                             textRole: "label"
                             currentIndex: {
@@ -725,11 +813,27 @@ ApplicationWindow {
                                 mpv.setSubtitleTrack(mpv.subtitleTracks[index].id)
                                 emby.reportPlaybackProgress(mpv.position, mpv.duration, "SubtitleTrackChange", mpv.paused)
                             }
+                            contentItem: Text {
+                                leftPadding: 12; rightPadding: 30
+                                text: subtitleSelector.displayText || "选择字幕"
+                                color: "#e5eaf2"; font.pixelSize: 11
+                                verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                            }
+                            background: Rectangle {
+                                radius: 9; color: subtitleSelector.down ? "#303b4c" : "#1c222d"
+                                border.color: subtitleSelector.hovered ? "#718bb8" : "#343c49"
+                            }
+                            delegate: ItemDelegate {
+                                width: subtitleSelector.width
+                                text: modelData.label
+                                highlighted: subtitleSelector.highlightedIndex === index
+                                contentItem: Text { text: parent.text; color: "#e8edf5"; font.pixelSize: 11; verticalAlignment: Text.AlignVCenter; leftPadding: 10 }
+                                background: Rectangle { color: parent.highlighted ? "#34445f" : "#171c25"; radius: 6 }
+                            }
+                            popup.background: Rectangle { radius: 10; color: "#171c25"; border.color: "#343c49" }
                         }
-                        Text { text: "音量"; color: "#aab2c1"; font.pixelSize: 10 }
-                        Slider { id: volumeSlider; from: 0; to: 100; value: 80; Layout.preferredWidth: 100; onMoved: mpv.volume(value) }
-                    }
-                }
+                        Item { Layout.fillWidth: true }
+                    }                }
             }
         }
     }
