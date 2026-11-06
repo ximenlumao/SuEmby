@@ -496,7 +496,7 @@ ApplicationWindow {
                                     Text {
                                         anchors.centerIn: parent
                                         visible: modelData.items.length === 0
-                                        text: "这个媒体库暂时没有可显示的影片"
+                                        text: modelData.loading ? "正在读取最新内容…" : "这个媒体库暂时没有可显示的影片"
                                         color: root.muted
                                         font.pixelSize: 11
                                     }
