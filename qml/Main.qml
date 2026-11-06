@@ -688,20 +688,28 @@ ApplicationWindow {
                     Item {
                         id: seekBar
                         Layout.fillWidth: true
-                        height: 24
+                        height: 30
                         property real preview: mpv.position
                         property bool dragging: false
-                        property real ratio: mpv.duration > 0 ? Math.max(0, Math.min(1, (dragging ? preview : mpv.position) / mpv.duration)) : 0
+                        property bool previewing: false
+                        property real ratio: mpv.duration > 0 ? Math.max(0, Math.min(1, (previewing ? preview : mpv.position) / mpv.duration)) : 0
                         function seekAt(x) {
                             if (mpv.duration <= 0 || width <= 0) return
+                            previewing = true
                             preview = Math.max(0, Math.min(1, x / width)) * mpv.duration
                             mpv.seek(preview)
+                            seekPreviewTimer.restart()
+                        }
+                        Timer {
+                            id: seekPreviewTimer
+                            interval: 900
+                            onTriggered: seekBar.previewing = false
                         }
                         Rectangle {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                            height: 5
+                            height: 6
                             radius: 3
                             color: "#303746"
                             Rectangle {
@@ -712,7 +720,7 @@ ApplicationWindow {
                             }
                         }
                         Rectangle {
-                            width: 13; height: 13; radius: 7
+                            width: 14; height: 14; radius: 7
                             x: Math.max(0, Math.min(parent.width - width, seekBar.width * seekBar.ratio - width / 2))
                             anchors.verticalCenter: parent.verticalCenter
                             color: seekMouse.containsMouse || seekMouse.pressed ? "#ffffff" : "#d4e1ff"
@@ -724,13 +732,22 @@ ApplicationWindow {
                         MouseArea {
                             id: seekMouse
                             anchors.fill: parent
+                            acceptedButtons: Qt.LeftButton
+                            preventStealing: true
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onPressed: { seekBar.dragging = true; seekBar.seekAt(mouse.x) }
+                            cursorShape: mpv.duration > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onPressed: {
+                                if (mpv.duration <= 0) { mouse.accepted = false; return }
+                                mouse.accepted = true
+                                seekBar.dragging = true
+                                seekBar.seekAt(mouse.x)
+                            }
                             onPositionChanged: if (pressed) seekBar.seekAt(mouse.x)
                             onReleased: {
                                 seekBar.seekAt(mouse.x)
                                 seekBar.dragging = false
+                                seekBar.seekAt(mouse.x)
+                                seekPreviewTimer.restart()
                                 emby.reportPlaybackProgress(seekBar.preview, mpv.duration, "TimeUpdate", mpv.paused)
                             }
                             onCanceled: seekBar.dragging = false
