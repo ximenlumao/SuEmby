@@ -9,6 +9,7 @@ class EmbyClient : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
     Q_PROPERTY(QVariantList libraries READ libraries NOTIFY librariesChanged)
+    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
     Q_PROPERTY(QString server READ server)
     Q_PROPERTY(QString userId READ userId)
@@ -19,6 +20,7 @@ public:
     using QObject::QObject;
     QVariantList items() const { return m_items; }
     QVariantList libraries() const { return m_libraries; }
+    bool loading() const { return m_loading; }
     QString error() const { return m_error; }
     QString server() const { return m_server; }
     QString userId() const { return m_uid; }
@@ -35,6 +37,7 @@ public:
 signals:
     void itemsChanged();
     void librariesChanged();
+    void loadingChanged();
     void errorChanged();
     void loggedIn();
     void playUrl(QString);
@@ -43,6 +46,7 @@ private:
     QString m_server, m_token, m_uid, m_error;
     QVariantList m_items, m_libraries;
     int m_itemsGeneration = 0;
+    bool m_loading = false;
     void get(QString, QVariantMap, std::function<void(QJsonObject)>);
     void authenticate(QString server, QString username, QString password);
     void loadItems(QVariantMap params);
