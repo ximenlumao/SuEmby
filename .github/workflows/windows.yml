@@ -43,6 +43,15 @@ jobs:
           if (-not (Test-Path dist/SuEmby.exe)) { throw 'Application executable missing after deployment' }
       - run: choco install innosetup --yes --no-progress
       - run: iscc installer/suemby.iss
+      - name: Diagnose bundled DLL dependencies
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter *.dll | ForEach-Object {
+            Write-Output "=== $($_.Name) ==="
+            dumpbin /dependents $_.FullName
+          }
+          Write-Output '=== SuEmby.exe ==='
+          dumpbin /dependents dist/SuEmby.exe
       - name: Install and verify desktop launch
         shell: pwsh
         run: |
