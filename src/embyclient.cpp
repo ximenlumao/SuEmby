@@ -166,8 +166,10 @@ void EmbyClient::requestHomeSections() {
                            {"StartIndex", 0}, {"Limit", 12},
                            {"Fields", "Overview,UserData,Genres,DateCreated"},
                            {"ImageTypeLimit", 1}};
-        if (section.value("type").toString() == "mixed")
-            params.remove("IncludeItemTypes"), params.insert("ExcludeItemTypes", "Episode,Season");
+        if (section.value("type").toString() == "mixed") {
+            params.remove("IncludeItemTypes");
+            params.insert("ExcludeItemTypes", "Episode,Season");
+        }
         QUrl url(m_server + "/emby/Users/" + m_uid + "/Items");
         QUrlQuery query;
         for (auto i = params.cbegin(); i != params.cend(); ++i)
