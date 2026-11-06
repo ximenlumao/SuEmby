@@ -233,6 +233,75 @@ void EmbyClient::search(QString s) {
                {"IncludeItemTypes", "Movie,Series"}});
 }
 
+void EmbyClient::post(QString path, QJsonObject body) {
+    QNetworkRequest request(QUrl(m_server + path));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("X-Emby-Token", m_token.toUtf8());
+    auto *reply = net.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        if (reply->error() != QNetworkReply::NoError) {
+            m_error = reply->errorString();
+            emit errorChanged();
+        }
+        reply->deleteLater();
+    });
+}
+
+void EmbyClient::setFavorite(QString id, bool favorite) {
+    const QString path = "/emby/Users/" + m_uid + "/FavoriteItems/" + id +
+                         (favorite ? "" : "/Delete");
+    QNetworkRequest request(QUrl(m_server + path));
+    request.setRawHeader("X-Emby-Token", m_token.toUtf8());
+    auto *reply = net.post(request, QByteArray{});
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const auto error = reply->error();
+        const QString errorText = reply->errorString();
+        reply->deleteLater();
+        if (error != QNetworkReply::NoError) {
+            m_error = errorText;
+            emit errorChanged();
+        } else if (!m_currentQuery.isEmpty()) {
+            loadItems(m_currentQuery);
+        }
+    });
+}
+
+void EmbyClient::reportPlaybackProgress(double position, double duration,
+                                        QString eventName, bool isPaused) {
+    Q_UNUSED(duration);
+    if (m_playbackItemId.isEmpty()) return;
+    const qint64 ticks = static_cast<qint64>(qMax(0.0, position) * 10000000.0);
+    const QJsonObject body{
+        {"QueueableMediaTypes", QJsonArray{"Video"}},
+        {"CanSeek", true}, {"ItemId", m_playbackItemId},
+        {"MediaSourceId", m_mediaSourceId}, {"IsPaused", isPaused},
+        {"IsMuted", false}, {"PositionTicks", ticks}, {"VolumeLevel", 100},
+        {"PlayMethod", "DirectPlay"}, {"PlaySessionId", m_playSessionId},
+        {"PlaylistIndex", 0}, {"PlaylistLength", 1}, {"PlaybackRate", 1.0},
+        {"EventName", eventName}
+    };
+    post("/emby/Sessions/Playing/Progress", body);
+}
+
+void EmbyClient::stopPlayback(double position, double duration) {
+    if (m_playbackItemId.isEmpty()) return;
+    const qint64 ticks = static_cast<qint64>(qMax(0.0, position) * 10000000.0);
+    const QJsonObject body{
+        {"QueueableMediaTypes", QJsonArray{"Video"}},
+        {"CanSeek", true}, {"ItemId", m_playbackItemId},
+        {"MediaSourceId", m_mediaSourceId}, {"IsPaused", false},
+        {"IsMuted", false}, {"PositionTicks", ticks}, {"VolumeLevel", 100},
+        {"PlayMethod", "DirectPlay"}, {"PlaySessionId", m_playSessionId},
+        {"PlaylistIndex", 0}, {"PlaylistLength", 1}, {"PlaybackRate", 1.0}
+    };
+    post("/emby/Sessions/Playing/Stopped", body);
+    if (duration > 0 && position / duration >= 0.9)
+        post("/emby/Users/" + m_uid + "/PlayedItems/" + m_playbackItemId);
+    m_playbackItemId.clear();
+    m_mediaSourceId.clear();
+    m_playSessionId.clear();
+}
+
 void EmbyClient::play(QString id) {
     get("/emby/Items/" + id + "/PlaybackInfo", {}, [this, id](QJsonObject o) {
         const auto sources = o.value("MediaSources").toArray();
