@@ -29,7 +29,11 @@ ApplicationWindow {
         if (label === "首页" && emby.libraries.length) {
             const lib = emby.libraries[0]
             sectionTitle.text = lib.name
-            emby.loadLibrary(lib.id)
+            emby.loadLibrary(lib.id, lib.type)
+        } else if (label === "继续观看") {
+            emby.loadSpecial("resume")
+        } else if (label === "收藏") {
+            emby.loadSpecial("favorites")
         }
     }
     function loadLibrary(id, label, collectionType) {
@@ -91,7 +95,11 @@ ApplicationWindow {
                 Text { text: "媒体"; color: root.muted; font.pixelSize: 11; font.bold: true; leftPadding: 12 }
                 Item { height: 10 }
                 Repeater {
-                    model: [{label:"首页", symbol:"⌂"}]
+                    model: [
+                        {label:"首页", symbol:"⌂"},
+                        {label:"继续观看", symbol:"▷"},
+                        {label:"收藏", symbol:"♡"}
+                    ]
                     delegate: Rectangle {
                         Layout.fillWidth: true
                         height: 42
@@ -500,6 +508,10 @@ ApplicationWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
+                        Button {
+                            text: root.selectedItem && root.selectedItem.favorite ? "♥ 已收藏" : "♡ 收藏"
+                            onClicked: if (root.selectedItem) emby.setFavorite(root.selectedItem.id, !root.selectedItem.favorite)
+                        }
                         Item { Layout.fillWidth: true }
                         Button { text: "关闭"; onClicked: detailsDialog.close() }
                         Button {
@@ -520,8 +532,10 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: Overlay.overlay
         width: Math.min(root.width - 48, 1120)
-        onClosed: mpv.stop()
-        onRejected: { mpv.stop(); close() }
+        onClosed: {
+            emby.stopPlayback(mpv.position, mpv.duration)
+            mpv.stop()
+        }
         height: Math.min(root.height - 48, 700)
         padding: 0
         background: Rectangle { radius: 16; color: "#08090c"; border.color: "#323743"; clip: true }
@@ -550,17 +564,20 @@ ApplicationWindow {
                         radius: 12
                         color: "#030406"
                         border.color: "#20242c"
+                        clip: true
+                        MpvVideoItem {
+                            id: videoSurface
+                            anchors.fill: parent
+                            player: mpv
+                            active: playerDialog.visible
+                        }
                         Column {
                             anchors.centerIn: parent
-                            width: parent.width - 50
                             spacing: 10
+                            visible: !mpv.playing
                             Text { anchors.horizontalCenter: parent.horizontalCenter; text: "▶"; color: "#93b8ff"; font.pixelSize: 34 }
                             Text { anchors.horizontalCenter: parent.horizontalCenter; text: root.currentTitle; color: "#dce1eb"; font.pixelSize: 16; font.bold: true }
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "正在通过 MPV 打开视频流"
-                                color: "#777f8d"; font.pixelSize: 11
-                            }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "正在连接视频流…"; color: "#777f8d"; font.pixelSize: 11 }
                         }
                     }
                     Slider {
@@ -568,8 +585,13 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         from: 0
                         to: Math.max(1, mpv.duration)
-                        value: mpv.position
-                        onMoved: mpv.seek(value)
+                        value: seekSlider.pressed ? seekSlider.previewValue : mpv.position
+                        property real previewValue: mpv.position
+                        onMoved: previewValue = value
+                        onPressedChanged: if (!pressed) {
+                            mpv.seek(value)
+                            emby.reportPlaybackProgress(value, mpv.duration, "TimeUpdate")
+                        }
                         background: Rectangle {
                             x: seekSlider.leftPadding
                             y: seekSlider.topPadding + seekSlider.availableHeight / 2 - height / 2
@@ -583,13 +605,49 @@ ApplicationWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: root.timeText(mpv.position) + " / " + root.timeText(mpv.duration); color: "#9ca3b2"; font.pixelSize: 10 }
+                        spacing: 8
+                        Text { text: root.timeText(mpv.position) + " / " + root.timeText(mpv.duration); color: "#aab2c1"; font.pixelSize: 10 }
                         Item { Layout.fillWidth: true }
-                        Button { text: "−10"; onClicked: mpv.seek(Math.max(0, mpv.position - 10)) }
-                        Button { text: "Ⅱ / ▶"; onClicked: mpv.pause() }
-                        Button { text: "+10"; onClicked: mpv.seek(mpv.position + 10) }
-                        Text { text: "音量"; color: "#9ca3b2"; font.pixelSize: 10; leftPadding: 12 }
-                        Slider { id: volumeSlider; from: 0; to: 100; value: 80; Layout.preferredWidth: 110; onMoved: mpv.volume(value) }
+                        Button { text: "−10 秒"; onClicked: mpv.seek(Math.max(0, mpv.position - 10)) }
+                        Button {
+                            text: mpv.paused ? "▶ 播放" : "Ⅱ 暂停"
+                            onClicked: {
+                                mpv.pause()
+                                emby.reportPlaybackProgress(mpv.position, mpv.duration, mpv.paused ? "Pause" : "Unpause", mpv.paused)
+                            }
+                        }
+                        Button { text: "+10 秒"; onClicked: mpv.seek(Math.min(mpv.duration, mpv.position + 10)) }
+                        Text { text: "音轨"; color: "#aab2c1"; font.pixelSize: 10 }
+                        ComboBox {
+                            id: audioSelector
+                            Layout.preferredWidth: 150
+                            model: mpv.audioTracks
+                            textRole: "label"
+                            currentIndex: {
+                                for (var i = 0; i < mpv.audioTracks.length; ++i)
+                                    if (mpv.audioTracks[i].selected) return i
+                                return mpv.audioTracks.length ? 0 : -1
+                            }
+                            onActivated: mpv.setAudioTrack(mpv.audioTracks[index].id)
+                        }
+                        Text { text: "字幕"; color: "#aab2c1"; font.pixelSize: 10 }
+                        ComboBox {
+                            id: subtitleSelector
+                            Layout.preferredWidth: 170
+                            model: mpv.subtitleTracks
+                            textRole: "label"
+                            currentIndex: {
+                                for (var i = 0; i < mpv.subtitleTracks.length; ++i)
+                                    if (mpv.subtitleTracks[i].selected) return i
+                                return mpv.subtitleTracks.length ? 0 : -1
+                            }
+                            onActivated: {
+                                mpv.setSubtitleTrack(mpv.subtitleTracks[index].id)
+                                emby.reportPlaybackProgress(mpv.position, mpv.duration, "SubtitleTrackChange", mpv.paused)
+                            }
+                        }
+                        Text { text: "音量"; color: "#aab2c1"; font.pixelSize: 10 }
+                        Slider { id: volumeSlider; from: 0; to: 100; value: 80; Layout.preferredWidth: 100; onMoved: mpv.volume(value) }
                     }
                 }
             }
@@ -597,6 +655,12 @@ ApplicationWindow {
     }
 
     Player { id: mpv }
+    Timer {
+        interval: 10000
+        repeat: true
+        running: playerDialog.visible && mpv.playing && !mpv.paused
+        onTriggered: emby.reportPlaybackProgress(mpv.position, mpv.duration, "TimeUpdate", mpv.paused)
+    }
     Component.onCompleted: {
         serverField.text = emby.savedServer
         userField.text = emby.savedUsername
